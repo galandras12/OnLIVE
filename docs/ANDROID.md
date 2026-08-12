@@ -222,7 +222,7 @@ csomagvesztés, uptime) — **így látszik az admin web UI-n, épp mivel megy a
 `webrtc/WhipClient.kt` — RFC 9725:
 
 1. `POST <ingest>/<stream>/whip`, törzs: SDP offer, `Content-Type: application/sdp`,
-   `Authorization: Bearer <streamKey>`
+   `Authorization: Basic base64("publisher:<streamKey>")`
 2. válasz `201 Created` + SDP answer + `Location:` a session erőforrás URL-je
 3. leállításkor `DELETE <resourceUrl>`
 
@@ -232,6 +232,11 @@ kérés megy át.
 
 **H.264 preferálás** SDP-szinten — ez a hardveres enkóder és az OBS/böngésző
 kompatibilitás miatt fontos.
+
+**Kétféle hitelesítés, szándékosan:** az ingest felé HTTP Basic megy, mert a
+MediaMTX belső auth módja ezt fogadja el (a Bearer token nála a `jwt` módhoz
+tartozik); a vezérlő szerver felé viszont `Bearer <streamKey>`, mert az a saját
+API-nk. Részletek: [`INGEST.md`](INGEST.md) 2. fejezet.
 
 > ⚠️ **A médiaút.** A WHIP jelzés átmegy a Cloudflare Tunnelen, a tényleges
 > WebRTC média (SRTP/ICE) **nem**. TURN nélkül NAT mögül jellemzően nem jön

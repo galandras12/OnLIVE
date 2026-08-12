@@ -87,6 +87,10 @@ Megvalósítás és a technikai döntések indoklása:
   publisher, hány olvasó van) — ezt a vezérlő szerver kérdezi le.
 - Ingest-hitelesítés (streamkulcs / útvonal-szintű jogosultság).
 
+Megvalósítás és a figyelési szerződés (webhook + API-poll, „megállt vs.
+megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
+(3. szegmens), konfiguráció: [`infra/mediamtx/`](infra/mediamtx/).
+
 **Kifejezetten NEM felelős ezért:**
 
 - ❌ Overlay-kompozíció, grafika, transzkódolás üzleti célból.
@@ -198,11 +202,17 @@ OnLIVE/
 ├── ARCHITECTURE.md            # ez a fájl (0. szegmens)
 ├── docs/
 │   ├── NETWORKING.md          # 1. szegmens — hálózat, tunnel, watchdog
-│   └── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
+│   ├── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
+│   └── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
 ├── infra/
-│   └── cloudflared/
-│       ├── config.example.yml # tunnel konfiguráció sablon
-│       └── README.md          # telepítési gyorstalpaló
+│   ├── cloudflared/
+│   │   ├── config.example.yml # tunnel konfiguráció sablon
+│   │   └── README.md          # telepítési gyorstalpaló
+│   └── mediamtx/
+│       ├── mediamtx.example.yml   # ingest konfiguráció sablon
+│       ├── install-mediamtx.ps1   # telepítő + indítási ütemezett feladat
+│       ├── ingest-probe.ps1       # health-check / állapot-lekérdezés
+│       └── hooks/                 # runOnReady / runOnNotReady webhookok
 ├── scripts/
 │   ├── tunnel-watchdog.ps1        # alagút-figyelő + automatikus restart
 │   └── install-tunnel-watchdog.ps1# ütemezett feladat regisztrálása
@@ -228,7 +238,7 @@ A teljes, előre rögzített szegmens-lista:
 | 0 | Architektúra és komponens-felelősségek | — (ez a dokumentum) | ✅ kész |
 | 1 | Hálózati réteg és elérhetőség | infra | ✅ kész |
 | 2 | Android alkalmazás: capture és publish | Android | ✅ kész |
-| 3 | Media ingest réteg beállítása | ingest | ⬜ hátravan |
+| 3 | Media ingest réteg beállítása | ingest | ✅ kész |
 | 4 | Vezérlő szerver: állapotgép | szerver | ⬜ hátravan |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ⬜ hátravan |
 | 6 | OBS integráció (Browser Source) | web | ⬜ hátravan |

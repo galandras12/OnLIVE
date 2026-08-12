@@ -3,6 +3,7 @@ package com.galandras.onlive.webrtc
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,6 +19,11 @@ import java.util.concurrent.TimeUnit
  *   1. `POST <whipUrl>`  törzs: SDP offer, `Content-Type: application/sdp`
  *   2. válasz: `201 Created`, törzs: SDP answer, `Location:` a session erőforrás URL-je
  *   3. `DELETE <resourceUrl>` a publish lezárásához
+ *
+ * Hitelesítés: HTTP **Basic** (`publisher` + streamkulcs). A MediaMTX belső
+ * auth módja Basic fejlécet és query paramétert fogad el; a Bearer token a
+ * `jwt` módhoz tartozik, ezért itt nem használható. A vezérlő szerver felé
+ * viszont Bearer megy — az a saját API-nk (lásd docs/INGEST.md 2. fejezet).
  *
  * Trickle ICE-t szándékosan NEM használunk: megvárjuk az ICE gathering
  * végét, és egyetlen, teljes offert küldünk. Így nincs szükség PATCH-re,
@@ -36,13 +42,22 @@ class WhipClient(
     /** Nem újrapróbálható hiba (pl. rossz streamkulcs) — nincs értelme backoffnak. */
     class FatalWhipException(message: String) : IOException(message)
 
-    suspend fun publish(whipUrl: String, offerSdp: String, streamKey: String): Session =
+    suspend fun publish(
+        whipUrl: String,
+        offerSdp: String,
+        streamKey: String,
+        ingestUser: String = DEFAULT_INGEST_USER,
+    ): Session =
         withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url(whipUrl)
                 .post(offerSdp.toRequestBody(SDP_MEDIA_TYPE))
                 .header("Content-Type", "application/sdp")
-                .apply { if (streamKey.isNotBlank()) header("Authorization", "Bearer $streamKey") }
+                .apply {
+                    if (streamKey.isNotBlank()) {
+                        header("Authorization", Credentials.basic(ingestUser, streamKey))
+                    }
+                }
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -69,13 +84,21 @@ class WhipClient(
         }
 
     /** A publish lezárása. Hiba esetén csak naplózunk — a leállást nem blokkolhatja. */
-    suspend fun delete(resourceUrl: String?, streamKey: String) = withContext(Dispatchers.IO) {
+    suspend fun delete(
+        resourceUrl: String?,
+        streamKey: String,
+        ingestUser: String = DEFAULT_INGEST_USER,
+    ) = withContext(Dispatchers.IO) {
         if (resourceUrl.isNullOrBlank()) return@withContext
         runCatching {
             val request = Request.Builder()
                 .url(resourceUrl)
                 .delete()
-                .apply { if (streamKey.isNotBlank()) header("Authorization", "Bearer $streamKey") }
+                .apply {
+                    if (streamKey.isNotBlank()) {
+                        header("Authorization", Credentials.basic(ingestUser, streamKey))
+                    }
+                }
                 .build()
             client.newCall(request).execute().use { Log.i(TAG, "WHIP delete: HTTP ${it.code}") }
         }.onFailure { Log.w(TAG, "WHIP delete sikertelen: ${it.message}") }
@@ -86,6 +109,7 @@ class WhipClient(
 
     companion object {
         private const val TAG = "OnLIVE/WHIP"
+        const val DEFAULT_INGEST_USER = "publisher"
         private val SDP_MEDIA_TYPE = "application/sdp".toMediaType()
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()

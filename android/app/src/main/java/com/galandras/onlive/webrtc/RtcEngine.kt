@@ -73,6 +73,7 @@ class RtcEngine(
     private var videoSender: RtpSender? = null
 
     private var resourceUrl: String? = null
+    private var ingestUser: String = WhipClient.DEFAULT_INGEST_USER
     private var lastVideoBytes = 0L
     private var lastAudioBytes = 0L
     private var lastStatsAt = 0L
@@ -209,7 +210,8 @@ class RtcEngine(
             "H264",
         )
 
-        val session = whip.publish(settings.whipUrl, mungedOffer, settings.streamKey)
+        ingestUser = settings.ingestUser
+        val session = whip.publish(settings.whipUrl, mungedOffer, settings.streamKey, ingestUser)
         resourceUrl = session.resourceUrl
 
         setRemoteDescription(
@@ -315,7 +317,7 @@ class RtcEngine(
     }
 
     suspend fun close(sendDelete: Boolean = true, streamKey: String = "") {
-        if (sendDelete) whip.delete(resourceUrl, streamKey)
+        if (sendDelete) whip.delete(resourceUrl, streamKey, ingestUser)
         resourceUrl = null
 
         // Előbb elvágjuk a képkocka-utat, csak utána bontjuk le a forrásokat —

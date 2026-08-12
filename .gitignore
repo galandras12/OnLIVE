@@ -153,3 +153,9 @@ infra/cloudflared/*.json
 # Watchdog és cloudflared naplók
 logs/
 *.log.1
+
+# MediaMTX: a kitöltött konfiguráció és a hook-környezet titkokat tartalmaz
+infra/mediamtx/mediamtx.yml
+infra/mediamtx/hooks/hook-env.bat
+!infra/mediamtx/mediamtx.example.yml
+!infra/mediamtx/hooks/hook-env.example.bat

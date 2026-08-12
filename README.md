@@ -16,6 +16,8 @@ szerveren és a web UI-n van.
 | [`docs/NETWORKING.md`](docs/NETWORKING.md) | **1. szegmens** — Cloudflare Tunnel, subdomainek, watchdog, WebRTC-médiaút |
 | [`docs/ANDROID.md`](docs/ANDROID.md) | **2. szegmens** — capture, WHIP publish, háttérfutás, reconnect |
 | [`android/`](android/) | az OnLIVE Android app forrása (Kotlin, CameraX + MediaProjection + WebRTC) |
+| [`docs/INGEST.md`](docs/INGEST.md) | **3. szegmens** — MediaMTX, kimeneti formátumok, ingest-figyelés, health-check |
+| [`infra/mediamtx/`](infra/mediamtx/) | MediaMTX konfiguráció, hookok, telepítő és ingest-próba |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -42,7 +44,14 @@ után sem változnak.
 
 ```powershell
 copy .env.example .env          # töltsd ki a titkokat és a portokat
-# majd kövesd: docs/NETWORKING.md → 4. fejezet (cloudflared telepítése)
+
+# 1) hálózat: fix, publikus URL-ek NAT mögül
+#    docs/NETWORKING.md → 4. fejezet (cloudflared telepítése)
+
+# 2) media ingest: a telefon ide publikál
+#    docs/INGEST.md → 6. fejezet
+cd infra\mediamtx
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
 ```
 
 ## Fejlesztési állapot — szegmensek
@@ -56,7 +65,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 0 | Architektúra és komponens-felelősségek | ✅ kész |
 | 1 | Hálózati réteg és elérhetőség | ✅ kész |
 | 2 | Android alkalmazás: capture és publish | ✅ kész |
-| 3 | Media ingest réteg beállítása | ⬜ hátravan |
+| 3 | Media ingest réteg beállítása | ✅ kész |
 | 4 | Vezérlő szerver: állapotgép | ⬜ hátravan |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ⬜ hátravan |
 | 6 | OBS integráció (Browser Source) | ⬜ hátravan |
@@ -71,13 +80,14 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **3.** MediaMTX WHIP végpont, streamkulcsos ingest-hitelesítés, és a **TURN
-  relay** beállítása — enélkül a WebRTC médiaút nem áll össze NAT mögül
-  ([`docs/NETWORKING.md`](docs/NETWORKING.md) 3. fejezet).
 - **4.** Az állapotgép: `OFFLINE → INTRO → LIVE → INTERRUPTED → OUTRO`, plusz a
   külön `PAUSED` állapot, amit a telefon Szünet gombja vált ki
   ([`docs/ANDROID.md`](docs/ANDROID.md) 6.1), és a
-  `/api/session/start|pause|resume|end|config|stats` végpontok kiszolgálása.
+  `/api/session/start|pause|resume|end|config|stats` végpontok kiszolgálása,
+  továbbá az `/api/ingest/ready|notready` hook-végpontok és az ingest-poll
+  ([`docs/INGEST.md`](docs/INGEST.md) 3. fejezet — a logika készen, átemelhetően).
+- **6. és 8.** A WHEP/HLS proxy, amin keresztül a `/live` oldal a MediaMTX
+  stream-jét játssza ([`docs/INGEST.md`](docs/INGEST.md) 4.1).
 - **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
   szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az

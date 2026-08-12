@@ -1,0 +1,170 @@
+# =============================================================================
+#  OnLIVE — MediaMTX konfiguráció (3. szegmens)
+# =============================================================================
+#  Cél: a telefon WHIP-en ide publikál, innen szolgálunk ki mindent tovább —
+#  WebRTC-t a web lejátszónak, RTMP-t a helyi továbbításnak (OBS), HLS-t
+#  tartaléknak.
+#
+#  Ez a fájl SABLON: a <...> helyőrzőket ki kell tölteni. A kitöltött
+#  változat (mediamtx.yml a MediaMTX mellett) titkokat tartalmaz, ezért a
+#  .gitignore kizárja.
+#
+#  Célverzió: MediaMTX v1.9+ (a v1.x konfigurációs kulcsokat használja).
+#  Részletes leírás: docs/INGEST.md
+# =============================================================================
+
+###############################################
+# Általános
+###############################################
+
+logLevel: info
+logDestinations: [stdout, file]
+logFile: C:\OnLIVE\logs\mediamtx.log
+
+# Ha ennyi ideig nem érkezik adat a publishertől, a MediaMTX bontja a
+# kapcsolatot, és az útvonal "not ready" lesz → ez váltja ki a
+# runOnNotReady hookot és vele a szerver INTERRUPTED állapotát.
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+
+###############################################
+# API és metrikák — CSAK localhost
+#
+# A vezérlő szerver ezt az API-t pollozza, hogy tudja: van-e éppen aktív
+# bejövő stream. Kifelé sosem publikáljuk (a cloudflared csak a 8889-es
+# WHIP portot teszi ki).
+###############################################
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+metrics: yes
+metricsAddress: 127.0.0.1:9998
+
+pprof: no
+playback: no
+
+###############################################
+# Hitelesítés (a 10. szegmens jogosultsági szintjeinek ingest-fele)
+#
+# - publish az `onlive` útvonalra: csak a `publisher` felhasználó a
+#   streamkulccsal (az OnLIVE Android app HTTP Basic fejlécet küld).
+# - read: alapértelmezés szerint CSAK localhostról — a böngésző felé a
+#   vezérlő szerver proxyzik (lásd docs/INGEST.md 4. fejezet).
+# - api/metrics: a bind cím miatt eleve csak localhostról érhető el.
+###############################################
+
+authMethod: internal
+authInternalUsers:
+  # A telefon. A jelszó = a streamkulcs (.env → ONLIVE_STREAM_KEY).
+  - user: publisher
+    pass: <streamkulcs>
+    ips: []
+    permissions:
+      - action: publish
+        path: onlive
+
+  # Olvasás a helyi gépről: a vezérlő szerver és az OBS.
+  - user: any
+    pass:
+    ips: [127.0.0.1, ::1]
+    permissions:
+      - action: read
+        path: onlive
+
+  # API és metrikák (localhost bind mellett is kell hozzá jogosultság).
+  - user: any
+    pass:
+    ips: [127.0.0.1, ::1]
+    permissions:
+      - action: api
+      - action: metrics
+
+###############################################
+# WHIP / WebRTC — a bejövő és a kimenő WebRTC is ezen a porton
+#
+# A cloudflared ide irányítja az ingest.galandras.com forgalmát (8889).
+###############################################
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcEncryption: no          # a TLS-t a Cloudflare Tunnel adja
+webrtcAllowOrigin: '*'
+webrtcTrustedProxies: []
+
+# ICE jelöltek. FONTOS: a WHIP JELZÉS megy át az alagúton, a MÉDIA NEM.
+# NAT mögül TURN nélkül jellemzően nem jön létre médiaút.
+# Lásd docs/NETWORKING.md 3. fejezet és docs/INGEST.md 5. fejezet.
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: ''
+webrtcIPsFromInterfaces: yes
+webrtcIPsFromInterfacesList: []
+webrtcAdditionalHosts: []
+
+webrtcICEServers2:
+  - url: stun:stun.cloudflare.com:3478
+  # TURN relay — ezt KELL kitölteni, különben mobilhálózatról nem lesz kép:
+  # - url: turn:turn.cloudflare.com:3478?transport=udp
+  #   username: <turn-user>
+  #   password: <turn-credential>
+
+###############################################
+# RTMP — helyi továbbítás (OBS "Media Source" / restream)
+###############################################
+
+rtmp: yes
+rtmpAddress: :1935
+rtmpEncryption: 'no'
+
+###############################################
+# HLS — tartalék / kompatibilitás
+#
+# Nagyobb késleltetésű, de mindenhol lejátszható. A /live oldal
+# elsődlegesen WebRTC-t használ, és csak hiba esetén esik ide vissza.
+###############################################
+
+hls: yes
+hlsAddress: :8888
+hlsEncryption: no
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsAlwaysRemux: no
+hlsAllowOrigin: '*'
+hlsTrustedProxies: []
+
+###############################################
+# RTSP / SRT — nem használjuk, ezért ki van kapcsolva
+###############################################
+
+rtsp: no
+srt: no
+
+###############################################
+# Útvonalak
+###############################################
+
+pathDefaults:
+  source: publisher
+  # Ne induljon el semmi magától, és ne maradjon bent halott útvonal.
+  sourceOnDemand: no
+  maxReaders: 0
+
+paths:
+  # Az OnLIVE egyetlen élő útvonala. A telefon ide publikál:
+  #   https://ingest.galandras.com/onlive/whip
+  onlive:
+    source: publisher
+
+    # --- Push értesítés a vezérlő szervernek ---------------------------------
+    # Ez ADJA a "megszakadt-e a telefon oldali forrás" jelzés gyors felét.
+    # A lassabb, de megbízhatóbb fele a szerver oldali API-poll
+    # (docs/INGEST.md 3. fejezet) — a kettő együtt működik.
+    runOnReady: C:\OnLIVE\infra\mediamtx\hooks\on-ready.bat "$MTX_PATH" "$MTX_SOURCE_TYPE" "$MTX_SOURCE_ID"
+    runOnReadyRestart: no
+    runOnNotReady: C:\OnLIVE\infra\mediamtx\hooks\on-not-ready.bat "$MTX_PATH" "$MTX_SOURCE_TYPE" "$MTX_SOURCE_ID"
+
+  # Minden más útvonal tiltva: a `paths` alatt fel nem sorolt név nem
+  # használható, mert nincs hozzá publish jogosultság.

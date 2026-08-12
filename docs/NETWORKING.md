@@ -78,9 +78,10 @@ futó `coturn`.
 
 - Előny: nem kell portot nyitni, a fix subdomain-séma marad, minden hálózatról működik.
 - Hátrány: a médiaforgalom egy relén megy át (némi többletkésleltetés, sávszélesség-költség).
-- Teendő a 3. szegmensben: a MediaMTX `webrtcICEServers2` beállításába bekerül a
-  TURN szerver és a hitelesítő adatai; a MediaMTX így TURN-jelöltet hirdet,
-  amit a telefon el tud érni.
+- Konfiguráció: a MediaMTX `webrtcICEServers2` beállításába kerül a TURN szerver
+  és a hitelesítő adatai; a MediaMTX így TURN-jelöltet hirdet, amit a telefon el
+  tud érni. A sablon készen áll (`infra/mediamtx/mediamtx.example.yml`), csak a
+  TURN sorokat kell kikommentezni — lásd [`INGEST.md`](INGEST.md) 5. fejezet.
 
 ### B) Legegyszerűbb médiaút: Tailscale a telefonon
 

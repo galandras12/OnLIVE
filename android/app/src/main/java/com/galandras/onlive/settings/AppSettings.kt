@@ -24,6 +24,8 @@ data class Settings(
     val controlBaseUrl: String = DEFAULT_CONTROL_URL,
     val streamPath: String = DEFAULT_STREAM_PATH,
     val streamKey: String = "",
+    /** A MediaMTX `authInternalUsers` publish-felhasználója (HTTP Basic név). */
+    val ingestUser: String = DEFAULT_INGEST_USER,
     val resolution: VideoResolution = VideoResolution.DEFAULT,
     val frameRate: FrameRate = FrameRate.DEFAULT,
     val videoBitrateKbps: Int = VideoBitrate.recommendedKbps(VideoResolution.DEFAULT, FrameRate.DEFAULT),
@@ -49,6 +51,7 @@ data class Settings(
         const val DEFAULT_INGEST_URL = "https://ingest.galandras.com"
         const val DEFAULT_CONTROL_URL = "https://admin.galandras.com"
         const val DEFAULT_STREAM_PATH = "onlive"
+        const val DEFAULT_INGEST_USER = "publisher"
     }
 }
 
@@ -59,6 +62,7 @@ class AppSettings(private val context: Context) {
         val controlUrl = stringPreferencesKey("control_url")
         val streamPath = stringPreferencesKey("stream_path")
         val streamKey = stringPreferencesKey("stream_key")
+        val ingestUser = stringPreferencesKey("ingest_user")
         val resolution = stringPreferencesKey("resolution")
         val fps = intPreferencesKey("fps")
         val videoBitrate = intPreferencesKey("video_bitrate_kbps")
@@ -78,6 +82,7 @@ class AppSettings(private val context: Context) {
             controlBaseUrl = p[Keys.controlUrl] ?: Settings.DEFAULT_CONTROL_URL,
             streamPath = p[Keys.streamPath] ?: Settings.DEFAULT_STREAM_PATH,
             streamKey = p[Keys.streamKey] ?: "",
+            ingestUser = p[Keys.ingestUser] ?: Settings.DEFAULT_INGEST_USER,
             resolution = VideoResolution.fromName(p[Keys.resolution]),
             frameRate = FrameRate.fromFps(p[Keys.fps]),
             videoBitrateKbps = p[Keys.videoBitrate]
@@ -98,13 +103,19 @@ class AppSettings(private val context: Context) {
 
     suspend fun current(): Settings = flow.first()
 
-    suspend fun setEndpoints(ingest: String, control: String, path: String, key: String) =
-        context.dataStore.edit {
-            it[Keys.ingestUrl] = ingest
-            it[Keys.controlUrl] = control
-            it[Keys.streamPath] = path
-            it[Keys.streamKey] = key
-        }
+    suspend fun setEndpoints(
+        ingest: String,
+        control: String,
+        path: String,
+        key: String,
+        ingestUser: String = Settings.DEFAULT_INGEST_USER,
+    ) = context.dataStore.edit {
+        it[Keys.ingestUrl] = ingest
+        it[Keys.controlUrl] = control
+        it[Keys.streamPath] = path
+        it[Keys.streamKey] = key
+        it[Keys.ingestUser] = ingestUser
+    }
 
     suspend fun setResolution(value: VideoResolution) =
         context.dataStore.edit { it[Keys.resolution] = value.name }
