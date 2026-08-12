@@ -141,3 +141,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# --- OnLIVE ------------------------------------------------------------------
+# Cloudflare Tunnel titkok — SOHA nem kerülhetnek a repóba
+.cloudflared/
+*cert.pem
+infra/cloudflared/config.yml
+infra/cloudflared/*.json
+!infra/cloudflared/config.example.yml
+
+# Watchdog és cloudflared naplók
+logs/
+*.log.1

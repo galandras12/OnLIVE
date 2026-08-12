@@ -1,0 +1,88 @@
+# =============================================================================
+#  OnLIVE — cloudflared tunnel konfiguráció (SABLON)
+# =============================================================================
+#  Másold ide, és töltsd ki a <...> helyőrzőket:
+#     %USERPROFILE%\.cloudflared\config.yml
+#  vagy (ha Windows service-ként fut):
+#     %ProgramData%\Cloudflare\cloudflared\config.yml
+#
+#  Létrehozás előtt:
+#     cloudflared tunnel login
+#     cloudflared tunnel create livestream
+#     cloudflared tunnel route dns livestream admin.galandras.com
+#     cloudflared tunnel route dns livestream live.galandras.com
+#     cloudflared tunnel route dns livestream ingest.galandras.com
+#
+#  Részletes leírás: docs/NETWORKING.md
+# =============================================================================
+
+# A tunnel neve vagy UUID-je (amit a `cloudflared tunnel create` adott).
+tunnel: livestream
+
+# A tunnel credentials fájlja. FIGYELEM: ez TITOK, nem kerülhet git repóba!
+# A `cloudflared tunnel create` írja ki az elérési útját.
+credentials-file: C:\Users\<felhasznalo>\.cloudflared\<tunnel-id>.json
+
+# Helyi metrics/health végpont — ezt figyeli a scripts/tunnel-watchdog.ps1.
+# A /ready 200-at ad, ha van élő konnektor a Cloudflare felé.
+metrics: 127.0.0.1:20241
+
+loglevel: info
+logfile: C:\OnLIVE\logs\cloudflared.log
+
+# Kimenő protokoll. Alapértelmezés: quic (UDP/7844). Ha a hálózat blokkolja
+# az UDP-t, a cloudflared automatikusan http2-re esik vissza; szigorú
+# tűzfal mögött érdemes fixen beállítani:
+# protocol: http2
+
+# Minden ingress-szabályra érvényes alapértékek.
+originRequest:
+  connectTimeout: 30s
+  tcpKeepAlive: 30s
+  keepAliveTimeout: 90s
+  noHappyEyeballs: true
+  # A WebSocket (Socket.io) átjárás alapból engedélyezett — ne kapcsold ki.
+
+# =============================================================================
+#  INGRESS — a szabályok SORRENDBEN értékelődnek ki, az első találat nyer.
+#  Az utolsó szabálynak MINDIG catch-allnak kell lennie (hostname nélkül).
+# =============================================================================
+ingress:
+
+  # ---------------------------------------------------------------------------
+  # 1) ADMIN — vezérlő/admin web UI (jelszóval védett, 9. szegmens)
+  #    Opcionálisan tegyél elé Cloudflare Access policy-t a dashboardon.
+  # ---------------------------------------------------------------------------
+  - hostname: admin.galandras.com
+    service: http://localhost:3000
+
+  # ---------------------------------------------------------------------------
+  # 2) LIVE — /live kompozit Browser Source végpont (OBS + publikus nézés)
+  #
+  #    MEGJEGYZÉS: a cloudflared NEM ír át útvonalat, a kérés path-ja
+  #    változatlanul megy az originhez. Ezért a `/live` gyökérre tétele a
+  #    Node szerver dolga: az Express a `Host: live.galandras.com` fejléc
+  #    alapján a `/` kérést a `/live` oldalra irányítsa (host-alapú routing).
+  #    Az `https://live.galandras.com/live` így is, úgy is működik.
+  # ---------------------------------------------------------------------------
+  - hostname: live.galandras.com
+    service: http://localhost:3000
+
+  # ---------------------------------------------------------------------------
+  # 3) INGEST — MediaMTX WHIP végpont (csak az OnLIVE Android app célozza,
+  #    streamkulccsal védve). A MediaMTX WebRTC/WHIP portja alapból 8889.
+  #
+  #    FONTOS: itt csak a WHIP JELZÉS megy át (HTTP POST, SDP csere).
+  #    A tényleges WebRTC média (SRTP/ICE) NEM megy át az alagúton —
+  #    ahhoz TURN relay kell. Lásd docs/NETWORKING.md 3. fejezet.
+  # ---------------------------------------------------------------------------
+  - hostname: ingest.galandras.com
+    service: http://localhost:8889
+    originRequest:
+      disableChunkedEncoding: true
+      connectTimeout: 10s
+
+  # ---------------------------------------------------------------------------
+  # 4) Catch-all — minden más kérés elutasítva
+  # ---------------------------------------------------------------------------
+  - service: http_status:404
