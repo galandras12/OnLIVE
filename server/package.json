@@ -1,0 +1,21 @@
+{
+  "name": "onlive-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OnLIVE vezérlő szerver — állapotgép, ingest-figyelés, admin API, valós idejű állapot-szinkron",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --env-file=../.env src/index.js",
+    "start:noenv": "node src/index.js",
+    "dev": "node --env-file=../.env --watch src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}

@@ -18,6 +18,8 @@ szerveren és a web UI-n van.
 | [`android/`](android/) | az OnLIVE Android app forrása (Kotlin, CameraX + MediaProjection + WebRTC) |
 | [`docs/INGEST.md`](docs/INGEST.md) | **3. szegmens** — MediaMTX, kimeneti formátumok, ingest-figyelés, health-check |
 | [`infra/mediamtx/`](infra/mediamtx/) | MediaMTX konfiguráció, hookok, telepítő és ingest-próba |
+| [`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md) | **4. szegmens** — állapotgép, a 2 perces szabály, Socket.io események, API |
+| [`server/`](server/) | a vezérlő szerver forrása (Node.js + Express + Socket.io) |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -52,6 +54,12 @@ copy .env.example .env          # töltsd ki a titkokat és a portokat
 #    docs/INGEST.md → 6. fejezet
 cd infra\mediamtx
 powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
+
+# 3) vezérlő szerver
+cd ..\..\server
+npm install
+npm test
+npm start
 ```
 
 ## Fejlesztési állapot — szegmensek
@@ -66,7 +74,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 1 | Hálózati réteg és elérhetőség | ✅ kész |
 | 2 | Android alkalmazás: capture és publish | ✅ kész |
 | 3 | Media ingest réteg beállítása | ✅ kész |
-| 4 | Vezérlő szerver: állapotgép | ⬜ hátravan |
+| 4 | Vezérlő szerver: állapotgép | ✅ kész |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ⬜ hátravan |
 | 6 | OBS integráció (Browser Source) | ⬜ hátravan |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ⬜ hátravan |
@@ -80,14 +88,11 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **4.** Az állapotgép: `OFFLINE → INTRO → LIVE → INTERRUPTED → OUTRO`, plusz a
-  külön `PAUSED` állapot, amit a telefon Szünet gombja vált ki
-  ([`docs/ANDROID.md`](docs/ANDROID.md) 6.1), és a
-  `/api/session/start|pause|resume|end|config|stats` végpontok kiszolgálása,
-  továbbá az `/api/ingest/ready|notready` hook-végpontok és az ingest-poll
-  ([`docs/INGEST.md`](docs/INGEST.md) 3. fejezet — a logika készen, átemelhetően).
+- **5.** Az intro/outro/megszakadt **média** kezelése és lejátszása — az
+  állapotgép már jelzi, melyik képernyő kell (`screen`, `introReason`), de a
+  tényleges videó/kép még hiányzik. A jelenlegi `/live` oldal ideiglenes.
 - **6. és 8.** A WHEP/HLS proxy, amin keresztül a `/live` oldal a MediaMTX
-  stream-jét játssza ([`docs/INGEST.md`](docs/INGEST.md) 4.1).
+  stream-jét játssza ([`docs/INGEST.md`](docs/INGEST.md) 4.1), és az admin felület.
 - **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
   szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az

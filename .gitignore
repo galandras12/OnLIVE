@@ -159,3 +159,6 @@ infra/mediamtx/mediamtx.yml
 infra/mediamtx/hooks/hook-env.bat
 !infra/mediamtx/mediamtx.example.yml
 !infra/mediamtx/hooks/hook-env.example.bat
+
+# OnLIVE szerver futásidejű adatai
+server/data/

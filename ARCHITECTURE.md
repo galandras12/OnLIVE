@@ -110,6 +110,7 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   A `PAUSED` vizuálisan ugyanaz, mint az `INTERRUPTED` („Megszakadt” képernyő),
   de nem indít visszatérés-várakozást — csak a „Folytatás” gomb hozza vissza
   (lásd [`docs/ANDROID.md`](docs/ANDROID.md) 6.1).
+  Megvalósítás és diagram: **[`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md)**.
 - **Session-API a telefonnak:** `POST /api/session/start | pause | resume | end |
   config | stats`, streamkulcsos Bearer hitelesítéssel. Az app ezeken keresztül
   csak jelez; hogy ebből intro, outro vagy „Megszakadt” képernyő lesz-e, azt
@@ -203,7 +204,8 @@ OnLIVE/
 ├── docs/
 │   ├── NETWORKING.md          # 1. szegmens — hálózat, tunnel, watchdog
 │   ├── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
-│   └── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
+│   ├── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
+│   └── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -216,7 +218,12 @@ OnLIVE/
 ├── scripts/
 │   ├── tunnel-watchdog.ps1        # alagút-figyelő + automatikus restart
 │   └── install-tunnel-watchdog.ps1# ütemezett feladat regisztrálása
-├── server/                    # vezérlő szerver (későbbi szegmens)
+├── server/                    # vezérlő szerver (4. szegmens)
+│   ├── src/state/             # ★ machine.js (tiszta), controller.js, store.js
+│   ├── src/ingest/monitor.js  # MediaMTX poll + debounce + megállás-figyelés
+│   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
+│   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
+│   └── test/                  # az állapotgép és a controller tesztjei
 ├── web/                       # admin UI + /live oldal (későbbi szegmens)
 └── android/                   # OnLIVE Android app (2. szegmens)
     └── app/src/main/java/com/galandras/onlive/
@@ -239,7 +246,7 @@ A teljes, előre rögzített szegmens-lista:
 | 1 | Hálózati réteg és elérhetőség | infra | ✅ kész |
 | 2 | Android alkalmazás: capture és publish | Android | ✅ kész |
 | 3 | Media ingest réteg beállítása | ingest | ✅ kész |
-| 4 | Vezérlő szerver: állapotgép | szerver | ⬜ hátravan |
+| 4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ⬜ hátravan |
 | 6 | OBS integráció (Browser Source) | web | ⬜ hátravan |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ⬜ hátravan |
