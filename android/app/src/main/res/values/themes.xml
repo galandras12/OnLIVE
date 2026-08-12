@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.OnLIVE" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/onlive_background</item>
+        <item name="android:navigationBarColor">@color/onlive_background</item>
+        <item name="android:windowBackground">@color/onlive_background</item>
+    </style>
+</resources>

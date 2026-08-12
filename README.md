@@ -14,6 +14,8 @@ szerveren és a web UI-n van.
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **0. szegmens** — a 4 komponens és szigorúan elkülönített felelősségi köreik |
 | [`docs/NETWORKING.md`](docs/NETWORKING.md) | **1. szegmens** — Cloudflare Tunnel, subdomainek, watchdog, WebRTC-médiaút |
+| [`docs/ANDROID.md`](docs/ANDROID.md) | **2. szegmens** — capture, WHIP publish, háttérfutás, reconnect |
+| [`android/`](android/) | az OnLIVE Android app forrása (Kotlin, CameraX + MediaProjection + WebRTC) |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -47,6 +49,6 @@ copy .env.example .env          # töltsd ki a titkokat és a portokat
 
 - [x] 0. szegmens — architektúra és felelősségi körök
 - [x] 1. szegmens — hálózati réteg, Cloudflare Tunnel, watchdog
-- [ ] 2. szegmens — media ingest (MediaMTX)
-- [ ] 3. szegmens — Android app (capture, WHIP, reconnect)
+- [x] 2. szegmens — Android app (capture, WHIP publish, háttérfutás, reconnect)
+- [ ] 3. szegmens — media ingest (MediaMTX + TURN)
 - [ ] 4+ szegmens — vezérlő szerver, állapotgép, overlay, web UI

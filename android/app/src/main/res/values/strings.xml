@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Az alkalmazás neve MINDEN felületen "OnLIVE" (lásd ARCHITECTURE.md 3. fejezet) -->
+    <string name="app_name">OnLIVE</string>
+
+    <string name="notification_channel_name">OnLIVE közvetítés</string>
+    <string name="notification_channel_desc">Az élő közvetítés állapota és gyors vezérlése</string>
+
+    <string name="action_start">Kezdés</string>
+    <string name="action_end">Befejezés</string>
+    <string name="action_pause">Szünet</string>
+    <string name="action_resume">Folytatás</string>
+
+    <string name="state_idle">Készenlét</string>
+    <string name="state_connecting">Csatlakozás…</string>
+    <string name="state_live">ÉLŐ</string>
+    <string name="state_reconnecting">Újracsatlakozás…</string>
+    <string name="state_paused">Szüneteltetve</string>
+    <string name="state_error">Hiba</string>
+
+    <string name="source_camera">Kamera</string>
+    <string name="source_screen">Képernyő</string>
+
+    <string name="lens_front">Előlapi</string>
+    <string name="lens_main">Fő</string>
+    <string name="lens_tele">Tele</string>
+    <string name="lens_ultrawide">Nagylátószögű</string>
+
+    <string name="battery_dialog_title">Akkumulátor-optimalizálás</string>
+    <string name="battery_dialog_text">Ahhoz, hogy a közvetítés háttérben és kikapcsolt képernyővel se szakadjon meg, az OnLIVE-ot ki kell venni az akkumulátor-optimalizálás alól.</string>
+
+    <string name="samsung_dialog_title">Samsung háttérkorlátozás</string>
+    <string name="samsung_dialog_text">A Samsung One UI a rendszerszintű beállítás felett saját „Alvó alkalmazások” listát is használ. Nyisd meg a Beállítások → Akkumulátor → Háttérhasználat-korlátozások oldalt, és vedd fel az OnLIVE-ot a „Sosem alszik” listára. Enélkül a közvetítés percek alatt leállhat.</string>
+    <string name="samsung_dialog_open">Beállítások megnyitása</string>
+    <string name="dialog_later">Később</string>
+    <string name="dialog_dont_show">Ne kérdezd újra</string>
+</resources>

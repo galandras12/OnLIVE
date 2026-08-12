@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ====================================================================
+         Alap jogosultságok
+         ==================================================================== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+
+    <!-- Android 13+: a Foreground Service notification megjelenítéséhez -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ====================================================================
+         Foreground Service — Android 14 (API 34) KÖTELEZŐ típus-jogosultságok.
+         Ha bármelyik hiányzik, a rendszer SecurityException-nel kilövi a
+         service-t már a startForeground() hívásnál.
+         ==================================================================== -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- Akkumulátor-optimalizálás alóli kivétel kérése (Doze elleni védelem) -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
+    <!-- Helyi felvételek / fotók mentése régi Android-verziókon.
+         API 29-től a MediaStore scoped storage-ot használjuk, ott nem kell. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.software.picture_in_picture" android:required="false" />
+
+    <application
+        android:name=".OnLiveApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.OnLIVE">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:screenOrientation="fullUser"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ================================================================
+             A teljes capture / kódolás / publish logika ITT fut, nem az
+             Activityben. Az Activity csak UI: ha appot váltunk, az Activity
+             megáll, a Service viszont tovább él és streamel.
+
+             A foregroundServiceType mindhárom használt típust felsorolja.
+             Futásidőben a startForeground(...) csak azokat a típusokat adja
+             át, amik éppen aktívak (kamera módban camera|microphone,
+             képernyő módban mediaProjection|microphone).
+             ================================================================ -->
+        <service
+            android:name=".stream.StreamService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="camera|microphone|mediaProjection" />
+
+    </application>
+</manifest>

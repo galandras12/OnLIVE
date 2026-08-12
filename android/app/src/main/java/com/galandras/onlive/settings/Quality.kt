@@ -1,0 +1,109 @@
+package com.galandras.onlive.settings
+
+/**
+ * Az OnLIVE app minőségi beállításai.
+ *
+ * Ezek az értékek nem maradnak a telefonon: a [com.galandras.onlive.net.ControlApi]
+ * minden `session/start` és `session/stats` hívásban felküldi őket a vezérlő
+ * szervernek, hogy az admin web UI-n is látszódjon, épp mivel megy az adás.
+ */
+
+/** Videó felbontás. A rövidebb oldal a mérvadó, az arányt a forrás adja. */
+enum class VideoResolution(val label: String, val width: Int, val height: Int) {
+    P480("480p", 854, 480),
+    P720("720p", 1280, 720),
+    P1080("1080p", 1920, 1080),
+    P1440("1440p", 2560, 1440);
+
+    companion object {
+        val DEFAULT = P1080
+        fun fromName(name: String?): VideoResolution =
+            entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
+}
+
+/** Képfrissítés. 60 fps csak 1080p-ig ajánlott mobilhálózaton. */
+enum class FrameRate(val fps: Int) {
+    FPS24(24), FPS30(30), FPS50(50), FPS60(60);
+
+    val label: String get() = "$fps fps"
+
+    companion object {
+        val DEFAULT = FPS30
+        fun fromFps(fps: Int?): FrameRate = entries.firstOrNull { it.fps == fps } ?: DEFAULT
+    }
+}
+
+/**
+ * Videó bitráta (kbps). A WebRTC ezt felső korlátként kapja meg
+ * (`RtpParameters.Encoding.maxBitrateBps`), a tényleges érték ennél a
+ * hálózat függvényében kisebb lehet.
+ */
+object VideoBitrate {
+    const val MIN_KBPS = 500
+    const val MAX_KBPS = 12_000
+
+    /** Ajánlott kiindulási bitráta a felbontás/fps párosra. */
+    fun recommendedKbps(resolution: VideoResolution, frameRate: FrameRate): Int {
+        val base = when (resolution) {
+            VideoResolution.P480 -> 1_200
+            VideoResolution.P720 -> 2_500
+            VideoResolution.P1080 -> 4_500
+            VideoResolution.P1440 -> 8_000
+        }
+        return if (frameRate.fps > 30) (base * 1.5).toInt() else base
+    }
+}
+
+/** Audio mintavételi frekvencia. Az Opus 48 kHz-en dolgozik natívan. */
+enum class AudioSampleRate(val hz: Int) {
+    HZ_16000(16_000), HZ_44100(44_100), HZ_48000(48_000);
+
+    val label: String get() = "${hz / 1000} kHz"
+
+    companion object {
+        val DEFAULT = HZ_48000
+        fun fromHz(hz: Int?): AudioSampleRate = entries.firstOrNull { it.hz == hz } ?: DEFAULT
+    }
+}
+
+/** Audio bitráta (kbps) — SDP-ben `maxaveragebitrate` az opus fmtp sorban. */
+enum class AudioBitrate(val kbps: Int) {
+    KBPS_32(32), KBPS_64(64), KBPS_96(96), KBPS_128(128);
+
+    val label: String get() = "$kbps kbps"
+
+    companion object {
+        val DEFAULT = KBPS_96
+        fun fromKbps(kbps: Int?): AudioBitrate = entries.firstOrNull { it.kbps == kbps } ?: DEFAULT
+    }
+}
+
+/** Capture forrás: kamera vagy képernyő-megosztás. */
+enum class CaptureSource { CAMERA, SCREEN }
+
+/**
+ * Fizikai lencse-kategóriák. A tényleges leképezés eszközfüggő, ezért a
+ * [com.galandras.onlive.stream.CameraSource] futásidőben, a Camera2
+ * metaadatok (fókusztávolság, látószög) alapján dönti el, melyik camera id
+ * melyik kategóriába esik — nem hardcode-olt id-k alapján.
+ */
+enum class LensKind(val label: String) {
+    FRONT("Előlapi"),
+    MAIN("Fő"),
+    TELE("Tele"),
+    ULTRA_WIDE("Nagylátószögű");
+
+    companion object {
+        val DEFAULT = MAIN
+        fun fromName(name: String?): LensKind = entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
+}
+
+/** Egy konkrét, az eszközön ténylegesen elérhető lencse. */
+data class LensOption(
+    val kind: LensKind,
+    val cameraId: String,
+    val focalLengthMm: Float,
+    val isFront: Boolean,
+)

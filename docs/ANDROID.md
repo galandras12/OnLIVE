@@ -1,0 +1,392 @@
+# OnLIVE — 2. szegmens: Android alkalmazás (capture és publish)
+
+> A telefon **kizárólag adatfolyam-forrás**. Nincs benne overlay, intro, outro,
+> logó vagy bármilyen kompozíciós logika — ez tudatos döntés
+> (lásd [`ARCHITECTURE.md`](../ARCHITECTURE.md) 2.1). Az app annyit tesz, hogy
+> képet és hangot küld, és jelzi a szervernek, hogy a felhasználó mit nyomott meg.
+
+Forrás: [`android/`](../android). Csomag: `com.galandras.onlive`.
+
+---
+
+## 1. Miért Foreground Service, és miért nem az Activity
+
+Ez a szegmens legkritikusabb pontja. Ha a capture/kódolás/publish az Activity
+életciklusához kötődik, appváltáskor az `onStop()` leállítja a kamerát, és az
+adás megszakad. Ezért:
+
+| Réteg | Osztály | Felelősség |
+|---|---|---|
+| UI | `MainActivity`, `ui/OnLiveScreen.kt` | csak megjelenítés és gombok |
+| Motor | `stream/StreamService.kt` | capture, kódolás, publish, állapot, reconnect |
+
+Az Activity bármikor megállhat, elforgatható, PIP-be tehető, vagy a rendszer
+meg is ölheti — a Service él tovább, és streamel.
+
+A kettő között **nincs binder/AIDL**: a kommunikáció egy processz-szintű
+állapotbuszon megy (`stream/StreamState.kt` → `StreamBus`). Az Activity
+`StateFlow`-t figyel, és `Intent`-akciókat küld a Service-nek. Így az Activity
+újraéledésekor azonnal a valós állapotot látja, kötés-újraépítés nélkül.
+
+### 1.1 CameraX a Service lifecycle-jához kötve
+
+```kotlin
+class StreamService : LifecycleService() { … }
+
+// és a kamera kötése:
+cameraProvider.bindToLifecycle(
+    lifecycleOwner,   // ← a StreamService, NEM az Activity
+    selector, preview, imageAnalysis, videoCapture,
+)
+```
+
+A `LifecycleService` (androidx.lifecycle:lifecycle-service) saját, a Service
+élettartamához kötött `Lifecycle`-t ad. Ha itt az Activity lenne a
+`LifecycleOwner`, az `onStop()` leállítaná a kamerát appváltáskor.
+
+A preview felületét az Activity „kölcsönadja”:
+
+```kotlin
+// Activity oldal (Compose):
+PreviewView(context).apply { StreamBus.attachPreview(surfaceProvider) }
+
+// Service oldal:
+StreamBus.surfaceProvider.collect { cameraSource?.setSurfaceProvider(it) }
+```
+
+Ha nincs UI, a `SurfaceProvider` `null` — a kamera-session ettől érintetlen marad.
+
+### 1.2 Foreground service típusok (Android 14 / API 34)
+
+A manifest deklarálja mindhárom típust, mert mindhármat használjuk:
+
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+<service
+    android:name=".stream.StreamService"
+    android:exported="false"
+    android:stopWithTask="false"
+    android:foregroundServiceType="camera|microphone|mediaProjection" />
+```
+
+Futásidőben viszont **csak az éppen aktív típusokat** adjuk át:
+
+```kotlin
+val types = when (source) {
+    CaptureSource.CAMERA -> FOREGROUND_SERVICE_TYPE_CAMERA or FOREGROUND_SERVICE_TYPE_MICROPHONE
+    CaptureSource.SCREEN -> FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or FOREGROUND_SERVICE_TYPE_MICROPHONE
+}
+ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, types)
+```
+
+**Két buktató, amit a kód kezel:**
+
+1. A `startForegroundService()` után **5 másodpercen belül** kötelező a
+   `startForeground()` — ezért az `onStartCommand()` legelső dolga ez, minden
+   suspend munka előtt. Különben `ForegroundServiceDidNotStartInTimeException`.
+2. Android 14-től a `mediaProjection` típusú foreground service-nek **már
+   futnia kell**, mielőtt a `MediaProjectionManager.getMediaProjection()`
+   meghívódik. A `StreamService.startScreenCapture()` ezt a sorrendet tartja:
+   előbb `promoteToForeground(SCREEN)`, csak utána `ScreenSource.start(...)`.
+
+### 1.3 WakeLock
+
+```kotlin
+wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OnLIVE::StreamWakeLock")
+wakeLock.acquire(6 * 60 * 60 * 1000L)   // 6 órás biztonsági plafon
+```
+
+A `PARTIAL_WAKE_LOCK` a CPU-t tartja ébren kikapcsolt képernyőnél is. A
+felszabadítás a `Befejezés`-nél és a Service `onDestroy()`-ában történik; a
+timeout csak biztonsági háló, ha valami elakadna.
+
+### 1.4 Akkumulátor-optimalizálás és a Samsung „alvó appok"
+
+**A helyes Foreground Service implementáció önmagában nem elég.** Két további
+réteg tud leállítani egy órákig futó adást:
+
+| Réteg | Kezelés | Kód |
+|---|---|---|
+| Rendszerszintű Doze | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` intent, első indításkor felajánlva | `util/BackgroundPermissions.requestIgnoreBatteryOptimizations()` |
+| Samsung One UI „Alvó alkalmazások” | nincs API — a felhasználót visszük el a beállításokhoz, egyszeri, elvethető instrukcióval | `util/BackgroundPermissions.openOemBatterySettings()` |
+
+A Samsung-instrukció szövege konkrét útvonalat ad: **Beállítások → Akkumulátor →
+Háttérhasználat-korlátozások**, és az OnLIVE felvétele a „Sosem alszik” listára.
+A „Ne kérdezd újra” választás a DataStore-ban tárolódik.
+
+### 1.5 Kitartó notification gyors műveletekkel
+
+`util/Notifications.kt` — mutatja az aktuális állapotot (`ÉLŐ`, `Újracsatlakozás…`,
+`Szüneteltetve`, `Hiba`), a bitrátát/fps-t/RTT-t, a helyi felvétel tényét, és
+tartalmaz akciógombokat: **Szünet / Folytatás** és **Befejezés**. Így nem kell
+visszaváltani az appra. A csatorna `IMPORTANCE_LOW` (csendes, de mindig látható).
+
+### 1.6 Picture-in-Picture
+
+`MainActivity.onUserLeaveHint()` → `enterPictureInPictureMode()`, API 31+
+esetén `setAutoEnterEnabled(true)`. PIP-ben a Compose UI elrejti a vezérlőket,
+csak a kép látszik.
+
+**A PIP kiegészítő, nem a védelem.** Az adatfolyam folytonosságát a Foreground
+Service + wakelock + akku-kizárás adja; a PIP csak vizuális visszajelzés.
+
+---
+
+## 2. Capture-források
+
+### 2.1 Kamera (CameraX)
+
+- `Preview` — a UI-nak (opcionális felület).
+- `ImageAnalysis` (`YUV_420_888`, `KEEP_ONLY_LATEST`) — innen jön a WebRTC képe.
+- `VideoCapture<Recorder>` — a párhuzamos helyi MP4-hez.
+
+A képkockák útja: `ImageAnalysis` → `ImageProxyConverter.toI420()` →
+`VideoFrame` → `FrameFanout` → WebRTC `VideoSource`.
+
+**Lencse-választás.** Nem hardcode-olt kamera-id-k, hanem Camera2 metaadatok
+alapján (`stream/CameraSource.enumerateLenses()`):
+
+| Kategória | Szabály |
+|---|---|
+| Előlapi | `LENS_FACING_FRONT` |
+| Fő | a `cameraIdList` első hátlapi eleme (konvenció szerint ez a fő) |
+| Nagylátószögű | hátlapi, fókusztávolsága < fő × 0,8 (a legkisebb) |
+| Tele | hátlapi, fókusztávolsága > fő × 1,4 (a legnagyobb) |
+
+Csak a ténylegesen létező lencsék jelennek meg chipként az UI-n.
+
+**Élő lencseváltás:** a Camera2 session lencsénként külön, ezért a CameraX-nek
+újra kell kötnie → jellemzően **300–800 ms kép-kiesés**. A WebRTC session
+viszont NEM szakad meg: ugyanaz a `VideoSource` és ugyanaz a `PeerConnection`
+marad, csak pár képkocka nem érkezik. A szerver oldali állapot végig `live`.
+
+### 2.2 Képernyő (MediaProjection)
+
+`stream/ScreenSource.kt` **saját `MediaProjection` példányt** kezel, nem a
+WebRTC `ScreenCapturerAndroid`-ját. Ok: a `ScreenCapturerAndroid` belül hozza
+létre és nem adja ki a projekciót, egy hozzájárulási tokenből viszont csak
+egy projekció nyerhető — így nem maradna mód a párhuzamos helyi felvételre.
+
+Saját kezelésben két `VirtualDisplay` készül ugyanabból a projekcióból:
+
+1. `SurfaceTextureHelper` felületére → WebRTC textúra-frame-ek (**zero-copy**),
+2. `MediaRecorder` felületére → helyi MP4.
+
+Android 14+ követelmény: `MediaProjection.registerCallback()` **kötelező** a
+`createVirtualDisplay()` előtt — a kód ezt megteszi, és a rendszer általi
+leállítást (`onStop`) is kezeli (automatikus visszaváltás kamerára).
+
+### 2.3 Kamera ↔ képernyő váltás egy gombbal
+
+A váltás **nem igényel WebRTC újratárgyalást**: egyetlen `VideoSource` van, és
+csak az változik, melyik capturer tolja bele a képet. A `PeerConnection`, az
+SDP és a WHIP session érintetlen — a szerver oldalon nincs szakadás.
+
+---
+
+## 3. Hang
+
+- Capture: a WebRTC `JavaAudioDeviceModule` (mikrofon).
+- Feldolgozás kikapcsolva (`AEC`, `AGC`, `NS`, highpass) — élő közvetítésnél ez
+  a kívánatos, különben a zene és a háttérhang torzul.
+- **Mintavétel** (16 / 44,1 / 48 kHz): az `AudioDeviceModule` a
+  `PeerConnectionFactory`-hoz kötődik, ezért a változtatás új motort igényel.
+  A `StreamService.ensureEngine()` ezt kezeli — session közben nem fordulhat elő.
+- **Bitráta** (32/64/96/128 kbps): SDP-szinten, az Opus `maxaveragebitrate`
+  paraméterén keresztül (`webrtc/SdpUtils.setOpusBitrate`).
+
+---
+
+## 4. Minőségi beállítások és visszajelentés a szervernek
+
+| Beállítás | Hatás | Újratárgyalás? |
+|---|---|---|
+| Felbontás | `VideoSource.adaptOutputFormat()` + CameraX újrakötés | nem |
+| Képfrissítés | Camera2 `CONTROL_AE_TARGET_FPS_RANGE` + `adaptOutputFormat()` | nem |
+| Videó bitráta | `RtpSender.parameters.encodings.maxBitrateBps` | nem |
+| Hang bitráta | Opus `maxaveragebitrate` (SDP) | igen, új session-nél |
+| Hang mintavétel | új `PeerConnectionFactory` | igen, új session-nél |
+
+Minden változás felmegy a vezérlő szervernek (`POST /api/session/config`), és
+3 másodpercenként telemetria is (`POST /api/session/stats`: bitráta, fps, RTT,
+csomagvesztés, uptime) — **így látszik az admin web UI-n, épp mivel megy az adás**.
+
+---
+
+## 5. WHIP publish
+
+`webrtc/WhipClient.kt` — RFC 9725:
+
+1. `POST <ingest>/<stream>/whip`, törzs: SDP offer, `Content-Type: application/sdp`,
+   `Authorization: Bearer <streamKey>`
+2. válasz `201 Created` + SDP answer + `Location:` a session erőforrás URL-je
+3. leállításkor `DELETE <resourceUrl>`
+
+**Nem trickle ICE:** megvárjuk az ICE gathering végét (max 5 s), és egyetlen,
+teljes offert küldünk. Nincs szükség `PATCH`-re, és az alagúton is egyetlen
+kérés megy át.
+
+**H.264 preferálás** SDP-szinten — ez a hardveres enkóder és az OBS/böngésző
+kompatibilitás miatt fontos.
+
+> ⚠️ **A médiaút.** A WHIP jelzés átmegy a Cloudflare Tunnelen, a tényleges
+> WebRTC média (SRTP/ICE) **nem**. TURN nélkül NAT mögül jellemzően nem jön
+> létre médiaút. A TURN adatai az app beállításai közt konfigurálhatók
+> (`turnUrl` / `turnUsername` / `turnCredential`).
+> Részletek: [`NETWORKING.md`](NETWORKING.md) 3. fejezet.
+
+---
+
+## 6. Session-vezérlés — mit tud az app, és mit nem
+
+Az app **semmit nem tud** az intróról, az outróról és az overlay-ről. Csak
+ennyit jelez:
+
+| Gomb | App | Szerver (4. szegmens) |
+|---|---|---|
+| **Kezdés** | publish indul | `POST /api/session/start` → `INTRO` állapot |
+| **Szünet** | publish leáll (WHIP DELETE), capture MEGY tovább | `POST /api/session/pause` → `PAUSED` |
+| **Folytatás** | új publish | `POST /api/session/resume` → `LIVE` |
+| **Befejezés** | publish leáll | `POST /api/session/end` → `OUTRO` → `OFFLINE` |
+
+A vezérlő szerver elérhetetlensége **nem állítja meg a publish-t**: a média a
+MediaMTX felé megy, attól függetlenül, hogy a Node szerver válaszol-e.
+
+### 6.1 A `paused` állapot — felvenni a 4. szegmens állapotgépébe
+
+`paused` **külön állapot**, nem azonos a `reconnecting`-gal:
+
+| | `reconnecting` | `paused` |
+|---|---|---|
+| Kiváltó | nem szándékos szakadás | felhasználói gomb |
+| Megjelenés a `/live` oldalon | „Megszakadt” képernyő | **ugyanaz** a képernyő |
+| Backoff-timer | van (1→2→4→…→30 s) | **nincs** |
+| Visszatérés | automatikus, ha a kapcsolat helyreáll | csak a „Folytatás” gombra |
+| Outro | nem indul | nem indul |
+
+### 6.2 Automatikus újracsatlakozás
+
+`StreamService.connectWithRetry()`:
+
+- Backoff: **1 s → 2 s → 4 s → 8 s → 16 s → 30 s (plafon)**, ±20% jitterrel.
+- Addig próbálkozik, amíg vagy helyreáll a kapcsolat, vagy a felhasználó
+  **explicit „Befejezés”-t** nyom. Szünet közben nem fut.
+- Kivétel: ha a szerver a streamkulcsot utasítja el (HTTP 401/403), a hiba
+  `FatalWhipException` → nincs értelme újrapróbálni, `ERROR` állapot.
+- A szakadást két forrásból vesszük észre: a WHIP kérés hibája, illetve a
+  `PeerConnection.PeerConnectionState` (`FAILED` / `DISCONNECTED` / `CLOSED`).
+- A UI és a notification mutatja a következő próbálkozásig hátralévő időt és a
+  próbálkozás sorszámát.
+
+---
+
+## 7. Kiegészítő funkciók
+
+### 7.1 Vaku
+
+- Ha fut a CameraX kamera: `CameraControl.enableTorch()`.
+- Ha nincs bekötött kamera (képernyő mód, vagy nincs adás):
+  `CameraManager.setTorchMode()` (`util/TorchController.kt`).
+
+Így a vaku a streamtől függetlenül, mindig elérhető.
+
+### 7.2 Fényképezőgép — aktuális képkocka mentése
+
+A `FrameFanout` mindig tárolja az utolsó képkockát; a gomb ezt menti JPEG-ként
+a galériába (`Pictures/OnLIVE`), a forgatás korrekciójával.
+
+Miért nem külön `ImageCapture` use case: az második capture-kérés lenne a
+kamerának (kép-kiesés, esetleg vaku-villanás), és képernyő módban egyáltalán
+nem működne. Így viszont **nulla hatással van a stream folytonosságára**, és
+kamera/képernyő módban egyaránt működik.
+
+### 7.3 Filmtekercs — párhuzamos helyi MP4
+
+| Mód | Megvalósítás | Kimenet |
+|---|---|---|
+| Kamera | CameraX `VideoCapture<Recorder>` | `Movies/OnLIVE/OnLIVE_*.mp4` |
+| Képernyő | `MediaRecorder` + második `VirtualDisplay` | `Movies/OnLIVE/OnLIVE_screen_*.mp4` |
+
+Külön enkóder, külön fájl: **ha a hálózat megszakad, a felvétel akkor is megy**,
+és fordítva. A gomb akkor is használható, ha nincs élő adás.
+
+**Két őszinte korlát:**
+
+1. **Élő adás közben a helyi felvétel kép-only.** A mikrofont ilyenkor a WebRTC
+   `AudioDeviceModule` tartja, és Android alatt egyszerre egy capture-kliens
+   birtokolhatja a mikrofont — a második vagy hibára fut, vagy elveszi a hangot
+   az adástól. Adás nélkül a felvétel hanggal készül.
+2. **A prompt „külön MediaRecorder instance"-t kért** — kamera módban ez
+   szó szerint nem lehetséges: a kamerát egyszerre egy kliens nyithatja meg, egy
+   második `MediaRecorder` nem tudna önállóan ugyanahhoz a kamerához férni.
+   A megvalósítás ezért egy kameraszesszió, két független enkóder-ág — ami a
+   kérés lényegét (a felvétel független a publish-tól) megtartja.
+
+---
+
+## 8. Fájlszerkezet
+
+```
+android/app/src/main/java/com/galandras/onlive/
+├── MainActivity.kt              # csak UI + engedélyek + PIP
+├── OnLiveApp.kt
+├── stream/
+│   ├── StreamService.kt         # ★ a motor: FGS, állapot, reconnect, vezérlés
+│   ├── StreamState.kt           # ConnectionState, StreamBus (állapotbusz)
+│   ├── CameraSource.kt          # CameraX: lencsék, torch, helyi felvétel
+│   ├── ScreenSource.kt          # MediaProjection: 2 VirtualDisplay
+│   ├── FrameFanout.kt           # egy belépési pont a képkockáknak
+│   ├── ImageProxyConverter.kt   # CameraX YUV → WebRTC I420
+│   └── PhotoSaver.kt            # képkocka → JPEG → galéria
+├── webrtc/
+│   ├── RtcEngine.kt             # PeerConnection, tracks, stats
+│   ├── WhipClient.kt            # WHIP POST/DELETE
+│   └── SdpUtils.kt              # Opus bitráta, H.264 preferálás
+├── net/ControlApi.kt            # /api/session/start|pause|resume|end|config|stats
+├── settings/                    # DataStore + minőségi enumok
+├── ui/OnLiveScreen.kt           # Compose felület
+└── util/                        # Notifications, BackgroundPermissions, Torch
+```
+
+---
+
+## 9. Build
+
+A repó **nem tartalmazza a Gradle wrappert** (bináris `gradle-wrapper.jar`).
+Első fordítás előtt:
+
+```bash
+cd android
+gradle wrapper --gradle-version 8.7    # vagy: nyisd meg Android Studióban, az generálja
+./gradlew assembleDebug
+```
+
+Telepítés: `./gradlew installDebug`, vagy `adb install app/build/outputs/apk/debug/app-debug.apk`.
+
+### TargetSdk 34 → 35
+
+A `targetSdk` a szegmens explicit kérése szerint **34** (Android 14). API 35-re
+lépés előtt két dolgot kell átnézni:
+
+- a `MediaProjection` hozzájárulás Android 15-ben **munkamenetenként** kérendő
+  (nem őrizhető meg korábbi tokenből),
+- a foreground service időkorlátok szigorodtak — a `mediaProjection` típusra
+  külön figyelmeztetés vonatkozik.
+
+A `MediaProjection.Callback` regisztrációja már most is megtörténik, tehát az
+a követelmény teljesül.
+
+---
+
+## 10. Ismert korlátok / továbbfejlesztési pontok
+
+| Téma | Jelen állapot | Lehetséges javítás |
+|---|---|---|
+| CameraX → WebRTC képút | `ImageAnalysis` YUV → I420 CPU-másolás (1080p30-nál ~93 MB/s) | textúra-út: a CameraX `Preview` felületét a `SurfaceTextureHelper`-nek adjuk, zero-copy frame-ek |
+| Képernyő mód `isScreencast` | `false` (egy közös `VideoSource`) | külön forrás vagy renegotiation, ha a szöveg élessége fontos |
+| Helyi felvétel hangja élő adás közben | nincs (mikrofon-ütközés) | a WebRTC audio-frame-ek kimentése és keverése a helyi fájlba |
+| Fordítás/tesztelés | a kód ebben a környezetben **nem lett lefordítva** (nincs Android SDK) | első build Android Studióban |

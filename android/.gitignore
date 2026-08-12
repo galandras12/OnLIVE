@@ -1,0 +1,16 @@
+# Gradle / Android build kimenetek
+.gradle/
+build/
+*/build/
+local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/

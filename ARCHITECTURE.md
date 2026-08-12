@@ -51,11 +51,18 @@ WebRTC natív stack, WHIP publish.
 - Mikrofon (és képernyőmegosztásnál rendszerhang, ahol az OS engedi) capture-je.
 - Videó/audió kódolás (H.264 / Opus), bitrate- és felbontás-kezelés.
 - WHIP publish a fix, publikus ingest URL-re, streamkulccsal.
-- Minimális UI: **Kezdés** / **Befejezés** gomb, kapcsolat-állapot kijelzés,
-  kamera-választó (elő/hátsó/képernyő), felbontás- és bitrate-választó.
-- Újracsatlakozási logika hálózatvesztés esetén (részletek: 3. szegmens).
-- A szervertől WebSocketen kapott állapot **megjelenítése** (pl. „adásban”,
-  „intro megy”, „a vezérlő leállította”).
+- Minimális UI: **Kezdés** / **Szünet** / **Befejezés** gomb, kapcsolat-állapot
+  kijelzés, lencse-választó (Előlapi / Fő / Tele / Nagylátószögű), kamera↔képernyő
+  váltás, felbontás-, fps-, bitrate- és hangminőség-választó.
+- Kényelmi funkciók, amik nem érintik a stream folytonosságát: vaku,
+  aktuális képkocka mentése a galériába, párhuzamos helyi MP4-rögzítés.
+- Háttérfutás: Foreground Service + wakelock + akkumulátor-optimalizálás
+  kizárás + gyártói (Samsung) háttérkorlátozás-instrukció; PIP mint kiegészítő.
+- Újracsatlakozási logika hálózatvesztés esetén (exponenciális backoff).
+- A szervertől kapott állapot **megjelenítése** (pl. „adásban”, „szüneteltetve”).
+
+Megvalósítás és a technikai döntések indoklása:
+**[`docs/ANDROID.md`](docs/ANDROID.md)** (2. szegmens), forrás: [`android/`](android).
 
 **Kifejezetten NEM felelős ezért (tudatos döntés — ne kerüljön bele):**
 
@@ -93,8 +100,16 @@ WebRTC natív stack, WHIP publish.
 
 **Felelős ezért:**
 
-- **Állapotgép:** `OFFLINE → INTRO → LIVE → INTERRUPTED → LIVE → OUTRO → OFFLINE`.
+- **Állapotgép:** `OFFLINE → INTRO → LIVE → INTERRUPTED → LIVE → OUTRO → OFFLINE`,
+  továbbá `LIVE ↔ PAUSED` (szándékos, felhasználó által kért szünet).
   Az állapotátmenetek egyetlen forrása; mind a telefon, mind a web UI ebből él.
+  A `PAUSED` vizuálisan ugyanaz, mint az `INTERRUPTED` („Megszakadt” képernyő),
+  de nem indít visszatérés-várakozást — csak a „Folytatás” gomb hozza vissza
+  (lásd [`docs/ANDROID.md`](docs/ANDROID.md) 6.1).
+- **Session-API a telefonnak:** `POST /api/session/start | pause | resume | end |
+  config | stats`, streamkulcsos Bearer hitelesítéssel. Az app ezeken keresztül
+  csak jelez; hogy ebből intro, outro vagy „Megszakadt” képernyő lesz-e, azt
+  kizárólag ez az állapotgép dönti el.
 - **Adás-felügyelet:** a MediaMTX állapotának figyelése, a publisher elvesztésének
   detektálása → automatikus `INTERRUPTED` állapot, visszatéréskor `LIVE`.
 - **Overlay-kompozíció leírása:** melyik widget (logó, chat, értesítés, alsó csík)
@@ -182,7 +197,8 @@ Részletek, konfiguráció, watchdog és a WebRTC-médiaút buktatói:
 OnLIVE/
 ├── ARCHITECTURE.md            # ez a fájl (0. szegmens)
 ├── docs/
-│   └── NETWORKING.md          # 1. szegmens — hálózat, tunnel, watchdog
+│   ├── NETWORKING.md          # 1. szegmens — hálózat, tunnel, watchdog
+│   └── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
 ├── infra/
 │   └── cloudflared/
 │       ├── config.example.yml # tunnel konfiguráció sablon
@@ -192,7 +208,15 @@ OnLIVE/
 │   └── install-tunnel-watchdog.ps1# ütemezett feladat regisztrálása
 ├── server/                    # vezérlő szerver (későbbi szegmens)
 ├── web/                       # admin UI + /live oldal (későbbi szegmens)
-└── android/                   # OnLIVE Android app (későbbi szegmens)
+└── android/                   # OnLIVE Android app (2. szegmens)
+    └── app/src/main/java/com/galandras/onlive/
+        ├── MainActivity.kt    # CSAK UI + engedélyek + PIP
+        ├── stream/            # StreamService (FGS), capture-források, állapotbusz
+        ├── webrtc/            # RtcEngine, WhipClient, SdpUtils
+        ├── net/               # ControlApi (session-jelzések)
+        ├── settings/          # DataStore + minőségi enumok
+        ├── ui/                # Compose felület
+        └── util/              # notification, háttér-engedélyek, torch
 ```
 
 ## 7. Szegmens-térkép
@@ -201,8 +225,8 @@ OnLIVE/
 |---|---|---|
 | 0 | Architektúra, felelősségi körök | — (ez a dokumentum) |
 | 1 | Hálózati réteg, Cloudflare Tunnel, watchdog | infra |
-| 2 | Media ingest (MediaMTX) beállítás | ingest |
-| 3 | Android app, capture + WHIP + reconnect | Android |
+| 2 | Android app: capture, WHIP publish, háttérfutás, reconnect | Android |
+| 3 | Media ingest (MediaMTX) beállítás, TURN | ingest |
 | 4+ | Vezérlő szerver, állapotgép, overlay, admin UI | szerver / web |
 | 9 | Jogosultsági szintek, hitelesítés | szerver |
 | 11 | Telepítés, `start.bat`, konzol üdvözlő üzenet | szerver / infra |
