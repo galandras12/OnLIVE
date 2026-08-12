@@ -17,7 +17,7 @@
     ezért a watchdog ilyenkor nem indítja újra a tunnelt.
 
     Amit a watchdog KIFEJEZETTEN nem kezel: a telefon hálózatvesztését.
-    Azt az Android app reconnect-logikája (3. szegmens) és a vezérlő szerver
+    Azt az Android app reconnect-logikája (2. szegmens) és a vezérlő szerver
     INTERRUPTED állapota kezeli.
 
 .PARAMETER ServiceName

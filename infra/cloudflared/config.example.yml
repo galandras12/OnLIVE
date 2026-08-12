@@ -50,7 +50,7 @@ originRequest:
 ingress:
 
   # ---------------------------------------------------------------------------
-  # 1) ADMIN — vezérlő/admin web UI (jelszóval védett, 9. szegmens)
+  # 1) ADMIN — vezérlő/admin web UI (jelszóval védett, 10. szegmens)
   #    Opcionálisan tegyél elé Cloudflare Access policy-t a dashboardon.
   # ---------------------------------------------------------------------------
   - hostname: admin.galandras.com

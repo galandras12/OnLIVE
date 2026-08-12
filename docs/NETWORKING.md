@@ -40,7 +40,7 @@ telefont felvesszük a tailnetbe, akkor a WebRTC média is közvetlen (WireGuard
 
 ## 2. Subdomain-felosztás felelősségi kör szerint
 
-A felosztás egybevág a 9. szegmens jogosultsági szintjeivel: minden subdomainnek
+A felosztás egybevág a 10. szegmens jogosultsági szintjeivel: minden subdomainnek
 más a közönsége és más a védelme.
 
 | Subdomain | Cél (helyi service) | Ki használja | Védelem |
@@ -78,7 +78,7 @@ futó `coturn`.
 
 - Előny: nem kell portot nyitni, a fix subdomain-séma marad, minden hálózatról működik.
 - Hátrány: a médiaforgalom egy relén megy át (némi többletkésleltetés, sávszélesség-költség).
-- Teendő a 2. szegmensben: a MediaMTX `webrtcICEServers2` beállításába bekerül a
+- Teendő a 3. szegmensben: a MediaMTX `webrtcICEServers2` beállításába bekerül a
   TURN szerver és a hitelesítő adatai; a MediaMTX így TURN-jelöltet hirdet,
   amit a telefon el tud érni.
 
@@ -250,7 +250,7 @@ fut, de nincs élő kapcsolata a Cloudflare felé (vagy a folyamat elszállt).
 
 **Fontos elhatárolás:** a watchdog **csak az alagutat** kezeli. Ha az alagút él,
 de a telefon nete szakadt meg, az **nem** a watchdog dolga — azt a telefon
-reconnect-logikája (3. szegmens) és a vezérlő szerver `INTERRUPTED` állapota
+reconnect-logikája (2. szegmens) és a vezérlő szerver `INTERRUPTED` állapota
 (állapotgép-szegmens) kezeli.
 
 **Indítás / regisztrálás ütemezett feladatként:**
@@ -271,7 +271,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\tunnel-watchdog.ps1 -Verbose
 ## 6. Mi történik, ha csak a telefon net-je szakad meg?
 
 Ez **nem hálózati infrastruktúra-hiba**, ezért itt csak a határokat rögzítjük;
-a megvalósítás a 3. szegmensé (Android reconnect) és az állapotgép-szegmensé.
+a megvalósítás a 2. szegmensé (Android reconnect) és a 4. szegmensé (állapotgép).
 
 Elvárt viselkedés, röviden:
 
@@ -330,7 +330,7 @@ tailscale ip -4        # pl. 100.x.y.z
 - Az `ingest.galandras.com` Cloudflare-route ilyenkor **tartalék** útvonalként
   megmarad, ha a telefon nem tud tailnetre lépni.
 - A telefon appban ezért **két ingest URL** konfigurálható: elsődleges (tailnet)
-  és tartalék (Cloudflare) — a választás a 3. szegmens feladata.
+  és tartalék (Cloudflare) — a választás a 2. szegmens feladata.
 
 ---
 

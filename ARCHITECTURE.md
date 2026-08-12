@@ -120,7 +120,7 @@ Megvalósítás és a technikai döntések indoklása:
 - **WebSocket állapot-szinkron:** minden csatlakozott kliens (telefon, admin UI,
   `/live` oldal) valós időben megkapja az aktuális állapotot.
 - **Hitelesítés és jogosultság:** admin jelszó, ingest streamkulcs kiadása/ellenőrzése
-  (részletek: 9. szegmens).
+  (részletek: 10. szegmens).
 - **Statikus kiszolgálás:** az admin UI és a `/live` oldal kiszolgálása.
 - **Indítási visszajelzés:** a `start.bat`-tal indított konzolban keretezett
   „OnLIVE szerver elindult” üzenet az elérhető URL-ekkel (11. szegmens).
@@ -221,12 +221,19 @@ OnLIVE/
 
 ## 7. Szegmens-térkép
 
-| Szegmens | Tartalom | Elsődleges komponens |
-|---|---|---|
-| 0 | Architektúra, felelősségi körök | — (ez a dokumentum) |
-| 1 | Hálózati réteg, Cloudflare Tunnel, watchdog | infra |
-| 2 | Android app: capture, WHIP publish, háttérfutás, reconnect | Android |
-| 3 | Media ingest (MediaMTX) beállítás, TURN | ingest |
-| 4+ | Vezérlő szerver, állapotgép, overlay, admin UI | szerver / web |
-| 9 | Jogosultsági szintek, hitelesítés | szerver |
-| 11 | Telepítés, `start.bat`, konzol üdvözlő üzenet | szerver / infra |
+A teljes, előre rögzített szegmens-lista:
+
+| # | Szegmens | Elsődleges komponens | Állapot |
+|---|---|---|---|
+| 0 | Architektúra és komponens-felelősségek | — (ez a dokumentum) | ✅ kész |
+| 1 | Hálózati réteg és elérhetőség | infra | ✅ kész |
+| 2 | Android alkalmazás: capture és publish | Android | ✅ kész |
+| 3 | Media ingest réteg beállítása | ingest | ⬜ hátravan |
+| 4 | Vezérlő szerver: állapotgép | szerver | ⬜ hátravan |
+| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ⬜ hátravan |
+| 6 | OBS integráció (Browser Source) | web | ⬜ hátravan |
+| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ⬜ hátravan |
+| 8 | Web UI: admin/vezérlő felület | web | ⬜ hátravan |
+| 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ⬜ hátravan |
+| 10 | Biztonság és hitelesítés | szerver | ⬜ hátravan |
+| 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ⬜ hátravan |

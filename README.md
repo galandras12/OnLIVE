@@ -45,10 +45,41 @@ copy .env.example .env          # töltsd ki a titkokat és a portokat
 # majd kövesd: docs/NETWORKING.md → 4. fejezet (cloudflared telepítése)
 ```
 
-## Fejlesztési állapot
+## Fejlesztési állapot — szegmensek
 
-- [x] 0. szegmens — architektúra és felelősségi körök
-- [x] 1. szegmens — hálózati réteg, Cloudflare Tunnel, watchdog
-- [x] 2. szegmens — Android app (capture, WHIP publish, háttérfutás, reconnect)
-- [ ] 3. szegmens — media ingest (MediaMTX + TURN)
-- [ ] 4+ szegmens — vezérlő szerver, állapotgép, overlay, web UI
+A rendszer előre rögzített, 12 szegmensből álló terv szerint épül. Minden
+szegmens egy önálló, működő réteget ad hozzá, és a felelősségi körök nem
+csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+
+| # | Szegmens | Állapot |
+|---|---|---|
+| 0 | Architektúra és komponens-felelősségek | ✅ kész |
+| 1 | Hálózati réteg és elérhetőség | ✅ kész |
+| 2 | Android alkalmazás: capture és publish | ✅ kész |
+| 3 | Media ingest réteg beállítása | ⬜ hátravan |
+| 4 | Vezérlő szerver: állapotgép | ⬜ hátravan |
+| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ⬜ hátravan |
+| 6 | OBS integráció (Browser Source) | ⬜ hátravan |
+| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ⬜ hátravan |
+| 8 | Web UI: admin/vezérlő felület | ⬜ hátravan |
+| 9 | Stream-monitor, letölthető napló és link-gyűjtő | ⬜ hátravan |
+| 10 | Biztonság és hitelesítés | ⬜ hátravan |
+| 11 | Telepítés, üzemeltetés, tesztelési terv | ⬜ hátravan |
+
+### Ami a következő szegmensekre marad
+
+Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
+munka, hanem szándékosan későbbre ütemezett:
+
+- **3.** MediaMTX WHIP végpont, streamkulcsos ingest-hitelesítés, és a **TURN
+  relay** beállítása — enélkül a WebRTC médiaút nem áll össze NAT mögül
+  ([`docs/NETWORKING.md`](docs/NETWORKING.md) 3. fejezet).
+- **4.** Az állapotgép: `OFFLINE → INTRO → LIVE → INTERRUPTED → OUTRO`, plusz a
+  külön `PAUSED` állapot, amit a telefon Szünet gombja vált ki
+  ([`docs/ANDROID.md`](docs/ANDROID.md) 6.1), és a
+  `/api/session/start|pause|resume|end|config|stats` végpontok kiszolgálása.
+- **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
+  szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
+- **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az
+  URL-ekkel, a `cloudflared` Windows service és a watchdog ütemezett feladat
+  telepítése.
