@@ -14,9 +14,10 @@
 
 import { Router } from 'express';
 import { Events } from '../state/machine.js';
+import { DeviceCommands } from '../device/commands.js';
 import { adminAuth, hookAuth, phoneAuth } from './auth.js';
 
-export function createRoutes({ config, controller, monitor, store, logger, startedAt }) {
+export function createRoutes({ config, controller, monitor, store, commands, logger, startedAt }) {
   const router = Router();
 
   // =========================================================================
@@ -28,6 +29,7 @@ export function createRoutes({ config, controller, monitor, store, logger, start
 
   session.post('/start', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
+    commands.touch({ device: req.body?.device, capture: req.body });
     const result = controller.send(Events.SESSION_START, {}, 'phone');
     res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
   });
@@ -51,13 +53,27 @@ export function createRoutes({ config, controller, monitor, store, logger, start
   /** Menet közbeni beállítás-változás (felbontás, lencse, forrás…). */
   session.post('/config', (req, res) => {
     controller.updateCapture(req.body ?? {});
+    commands.touch({ device: req.body?.device, capture: req.body });
     res.json({ ok: true });
   });
 
-  /** 3 másodpercenként érkező telemetria — csak az admin UI-nak. */
+  /**
+   * 3 másodpercenként érkező telemetria.
+   *
+   * A VÁLASZ hozza a telefonra váró parancsokat (8. szegmens): így a web UI-ról
+   * indított kamera-váltás, minőség-állítás vagy „Befejezés" plusz kérés nélkül,
+   * legfeljebb 3 másodperces késéssel eljut az apphoz.
+   */
   session.post('/stats', (req, res) => {
     controller.updateStats(req.body ?? {});
-    res.json({ ok: true });
+    commands.touch();
+    res.json({ ok: true, commands: commands.pull() });
+  });
+
+  /** Külön lekérdezés — ha az app gyorsabb reakciót akar, mint a stats ciklus. */
+  session.get('/commands', (req, res) => {
+    commands.touch();
+    res.json({ commands: commands.pull() });
   });
 
   router.use('/api/session', session);

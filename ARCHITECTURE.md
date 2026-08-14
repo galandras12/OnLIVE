@@ -60,6 +60,9 @@ WebRTC natív stack, WHIP publish.
   kizárás + gyártói (Samsung) háttérkorlátozás-instrukció; PIP mint kiegészítő.
 - Újracsatlakozási logika hálózatvesztés esetén (exponenciális backoff).
 - A szervertől kapott állapot **megjelenítése** (pl. „adásban”, „szüneteltetve”).
+- A vezérlő szervertől kapott **parancsok végrehajtása** (a web UI-ról indított
+  kamera-váltás, minőség-állítás, Befejezés) — ugyanazokkal a belső kezelőkkel,
+  mint a saját gombjai.
 
 Megvalósítás és a technikai döntések indoklása:
 **[`docs/ANDROID.md`](docs/ANDROID.md)** (2. szegmens), forrás: [`android/`](android).
@@ -128,6 +131,10 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   (**[`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md)**, 5. szegmens).
 - **Admin API:** start/stop, intro/outro indítás, widgetek kapcsolása,
   szövegek/értesítések küldése, beállítások mentése.
+- **Eszköz-parancscsatorna:** a web UI-ról indított műveletek (kamera-váltás,
+  minőség, Befejezés) eljuttatása a telefonhoz a telemetria válaszában
+  (**[`docs/ADMIN-UI.md`](docs/ADMIN-UI.md)**, 8. szegmens). Enélkül az app
+  tovább publikálna egy weben lezárt adás alatt.
 - **WebSocket állapot-szinkron:** minden csatlakozott kliens (telefon, admin UI,
   `/live` oldal) valós időben megkapja az aktuális állapotot.
 - **Hitelesítés és jogosultság:** admin jelszó, ingest streamkulcs kiadása/ellenőrzése
@@ -220,7 +227,8 @@ OnLIVE/
 │   ├── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
 │   ├── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
 │   ├── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
-│   └── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
+│   ├── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
+│   └── ADMIN-UI.md            # 8. szegmens — admin felület, parancscsatorna
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -238,6 +246,7 @@ OnLIVE/
 │   ├── src/ingest/            # monitor.js (poll, debounce) + control.js (kick)
 │   ├── src/media/             # média-tár és tartalom-alapú validáció
 │   ├── src/overlay/           # widgetek: pozíció, láthatóság, beágyazás-kulcsok
+│   ├── src/device/            # web UI → telefon parancssor és jelenlét
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
@@ -268,7 +277,7 @@ A teljes, előre rögzített szegmens-lista:
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
 | 6 | OBS integráció (Browser Source) | web | ✅ kész |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
-| 8 | Web UI: admin/vezérlő felület | web | ⬜ hátravan |
+| 8 | Web UI: admin/vezérlő felület | web | ✅ kész |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ⬜ hátravan |
 | 10 | Biztonság és hitelesítés | szerver | ⬜ hátravan |
 | 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ⬜ hátravan |

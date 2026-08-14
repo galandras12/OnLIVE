@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin</title>
+<link rel="stylesheet" href="/admin.css">
+<style>
+  main { padding: 1.1rem 1.25rem; max-width: 1500px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .live-head { display: grid; grid-template-columns: minmax(280px, 1fr) 1.3fr; gap: var(--gap); align-items: start; }
+  @media (max-width: 900px) { .live-head { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1 class="brand"><span>OnLIVE</span> — Admin</h1>
+  <nav class="tabs">
+    <button class="tab active" data-panel="control">Vezérlés</button>
+    <button class="tab" data-panel="overlay">Overlay</button>
+    <button class="tab" data-panel="media">Média</button>
+    <button class="tab" data-panel="obs">OBS</button>
+    <button class="tab" data-panel="monitor">Monitor és linkek</button>
+  </nav>
+  <div class="spacer"></div>
+  <span class="pill" id="devicePill">telefon: …</span>
+  <input type="password" id="password" placeholder="admin jelszó" style="width:11rem">
+</header>
+
+<main>
+
+  <!-- ================= VEZÉRLÉS ================= -->
+  <section class="panel active" id="panel-control">
+    <div class="live-head">
+
+      <div class="grid">
+        <div class="card">
+          <h2>Állapot</h2>
+          <div class="status">
+            <span class="dot" id="stateDot"></span>
+            <div>
+              <div class="name" id="stateName">…</div>
+              <div class="detail" id="stateDetail"></div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:.9rem">
+            <button class="btn big" id="btnStart">Kezdés</button>
+            <button class="btn big ghost" id="btnPause">Szünet</button>
+            <button class="btn big" id="btnStop">Befejezés</button>
+          </div>
+          <p class="note" style="margin-top:.6rem">
+            Ugyanaz, mint a telefonon: bármelyik felület indíthatja és zárhatja
+            a sessiont, és a másik azonnal frissül.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>Élő metrikák</h2>
+          <div class="metrics">
+            <div class="metric"><div class="k">Videó</div><div class="v" id="mVideo">–<small>kbps</small></div></div>
+            <div class="metric"><div class="k">FPS</div><div class="v" id="mFps">–</div></div>
+            <div class="metric"><div class="k">RTT</div><div class="v" id="mRtt">–<small>ms</small></div></div>
+            <div class="metric"><div class="k">Vesztés</div><div class="v" id="mLoss">–<small>%</small></div></div>
+            <div class="metric"><div class="k">Adásidő</div><div class="v" id="mUptime">–</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Előnézet</h2>
+        <p class="hint">Pontosan az, amit az OBS Browser Source is mutat.</p>
+        <iframe class="frame preview" id="previewFrame" src="/live?bg=solid"></iframe>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:var(--gap)">
+
+      <div class="card">
+        <h2>Kamera</h2>
+        <p class="hint">A parancs a telefon következő jelzésével ér oda (≤3 mp).</p>
+        <div class="field">
+          <label>Lencse</label>
+          <div class="chips" id="lensChips">
+            <button class="chip" data-lens="front">Előlapi</button>
+            <button class="chip" data-lens="main">Fő</button>
+            <button class="chip" data-lens="tele">Tele</button>
+            <button class="chip" data-lens="ultra_wide">Nagylátószögű</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Forrás</label>
+          <div class="chips" id="sourceChips">
+            <button class="chip" data-source="camera">Kamera</button>
+            <button class="chip" data-source="screen">Képernyő</button>
+          </div>
+          <p class="note" style="margin-top:.35rem">
+            Képernyő-megosztáshoz a telefonon jóvá kell hagyni — az Android ezt
+            távolról nem engedi megkerülni.
+          </p>
+        </div>
+        <div class="row">
+          <button class="btn ghost" id="btnTorch">Vaku</button>
+          <button class="btn ghost" id="btnPhoto">Kép mentése</button>
+          <button class="btn ghost" id="btnRecording">Helyi felvétel</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Minőség</h2>
+        <p class="hint">Adás közben is állítható; a bitráta újratárgyalás nélkül változik.</p>
+
+        <div class="field">
+          <label>Felbontás</label>
+          <div class="chips" id="resChips">
+            <button class="chip" data-res="P480">480p</button>
+            <button class="chip" data-res="P720">720p</button>
+            <button class="chip" data-res="P1080">1080p</button>
+            <button class="chip" data-res="P1440">1440p</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Képfrissítés</label>
+          <div class="chips" id="fpsChips">
+            <button class="chip" data-fps="24">24</button>
+            <button class="chip" data-fps="30">30</button>
+            <button class="chip" data-fps="50">50</button>
+            <button class="chip" data-fps="60">60</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Videó bitráta <b id="bitrateValue">4500 kbps</b></label>
+          <input type="range" id="bitrate" min="500" max="12000" step="100" value="4500">
+        </div>
+
+        <div class="field">
+          <label>Hang mintavétel</label>
+          <div class="chips" id="sampleChips">
+            <button class="chip" data-sample="16000">16 kHz</button>
+            <button class="chip" data-sample="44100">44,1 kHz</button>
+            <button class="chip" data-sample="48000">48 kHz</button>
+          </div>
+          <p class="note" style="margin-top:.35rem">
+            A mintavétel csak új session indításakor lép életbe.
+          </p>
+        </div>
+
+        <div class="field">
+          <label>Hang bitráta <b id="audioBitrateValue">96 kbps</b></label>
+          <input type="range" id="audioBitrate" min="32" max="128" step="32" value="96">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= OVERLAY / MÉDIA / OBS ================= -->
+  <section class="panel" id="panel-overlay">
+    <iframe class="frame tall" id="overlayFrame" data-src="/admin/overlay"></iframe>
+  </section>
+
+  <section class="panel" id="panel-media">
+    <iframe class="frame tall" id="mediaFrame" data-src="/admin/media"></iframe>
+  </section>
+
+  <section class="panel" id="panel-obs">
+    <iframe class="frame tall" id="obsFrame" data-src="/admin/obs"></iframe>
+  </section>
+
+  <!-- ================= MONITOR ÉS LINKEK ================= -->
+  <section class="panel" id="panel-monitor">
+    <div class="grid cols-2">
+
+      <div class="card">
+        <h2>Stream-monitor</h2>
+        <p class="hint">Az ingest réteg és a telefon állapota egy helyen.</p>
+        <table>
+          <tr><th>Ingest elérhető</th><td id="monAvailable">–</td></tr>
+          <tr><th>Bejövő adat</th><td id="monFlowing">–</td></tr>
+          <tr><th>Sávok</th><td id="monTracks">–</td></tr>
+          <tr><th>Olvasók</th><td class="num" id="monReaders">–</td></tr>
+          <tr><th>Telefon</th><td id="monDevice">–</td></tr>
+          <tr><th>Capture</th><td id="monCapture">–</td></tr>
+          <tr><th>Szerver-állapot</th><td id="monState">–</td></tr>
+        </table>
+        <p class="note" style="margin-top:.7rem">
+          A részletes stream-monitor és a letölthető napló a 9. szegmensben
+          bővül — az átmenet-napló alatta már gyűlik.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>Linkek</h2>
+        <p class="hint">Kattints a másoláshoz.</p>
+        <table id="linkTable"></table>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1">
+        <h2>Állapot-előzmény</h2>
+        <p class="hint">A legutóbbi átmenetek, forrással együtt.</p>
+        <div class="log"><table id="logTable"></table></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  // =========================================================================
+  //  Alapok
+  // =========================================================================
+
+  const password = {
+    get: () => localStorage.getItem('onlive.admin') ?? '',
+    set: (value) => localStorage.setItem('onlive.admin', value),
+  };
+  const headers = () => ({ 'X-OnLIVE-Admin-Password': password.get(), 'Content-Type': 'application/json' });
+
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null;
+  function toast(message, isError) {
+    toastEl.textContent = message;
+    toastEl.classList.toggle('err', Boolean(isError));
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+
+  async function post(path, body) {
+    try {
+      const response = await fetch(path, { method: 'POST', headers: headers(), body: JSON.stringify(body ?? {}) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { toast(data.error ?? 'Sikertelen művelet', true); return null; }
+      if (data.note) toast(data.note);
+      return data;
+    } catch (error) {
+      toast(error.message, true);
+      return null;
+    }
+  }
+
+  // =========================================================================
+  //  Fülek — az iframe-ek csak az első megnyitáskor töltenek be
+  // =========================================================================
+
+  for (const tab of document.querySelectorAll('.tab')) {
+    tab.addEventListener('click', () => {
+      for (const other of document.querySelectorAll('.tab')) other.classList.toggle('active', other === tab);
+      for (const panel of document.querySelectorAll('.panel')) {
+        panel.classList.toggle('active', panel.id === 'panel-' + tab.dataset.panel);
+      }
+      const frame = document.querySelector('#panel-' + tab.dataset.panel + ' iframe[data-src]');
+      if (frame && !frame.src) frame.src = frame.dataset.src;
+      if (tab.dataset.panel === 'monitor') loadTransitions();
+    });
+  }
+
+  // =========================================================================
+  //  Állapot (Socket.io — a telefon és a web UI ugyanazt látja)
+  // =========================================================================
+
+  const STATE_LOOK = {
+    idle: { label: 'Készenlét', dot: '' },
+    intro: { label: 'Intro', dot: 'warn' },
+    live: { label: 'ÉLŐ', dot: 'live' },
+    reconnecting: { label: 'Megszakadt', dot: 'warn' },
+    paused: { label: 'Szüneteltetve', dot: 'warn' },
+    outro: { label: 'Outro', dot: 'info' },
+    ended: { label: 'Vége', dot: '' },
+  };
+
+  let snapshot = null;
+
+  function renderState(next) {
+    snapshot = next;
+    const look = STATE_LOOK[next.state] ?? { label: next.state, dot: '' };
+
+    document.getElementById('stateName').textContent = look.label;
+    document.getElementById('stateDot').className = 'dot ' + look.dot;
+
+    const detail = [];
+    if (next.state === 'paused') detail.push('szándékos szünet — csak a Folytatás hozza vissza');
+    else if (next.state === 'reconnecting') detail.push('várjuk a stream visszatérését');
+    else if (next.state === 'outro' && next.outro?.endsAt) {
+      detail.push(Math.max(0, Math.ceil((next.outro.endsAt - Date.now()) / 1000)) + ' mp múlva vége');
+    }
+    if (next.context?.sessionId) detail.push('session: ' + next.context.sessionId);
+    document.getElementById('stateDetail').textContent = detail.join(' · ');
+
+    // A Szünet gomb Folytatásra vált, ahogy a telefonon is.
+    const paused = next.state === 'paused';
+    const running = !['idle', 'ended'].includes(next.state);
+    document.getElementById('btnPause').textContent = paused ? 'Folytatás' : 'Szünet';
+    document.getElementById('btnStart').disabled = running;
+    document.getElementById('btnPause').disabled = !running || next.state === 'outro';
+    document.getElementById('btnStop').disabled = !running;
+
+    if (next.stats) renderStats(next.stats);
+    if (next.ingest) renderIngest(next.ingest, next.state);
+    if (next.capture) renderCapture(next.capture);
+  }
+
+  function renderStats(stats) {
+    const set = (id, value, unit) => {
+      document.getElementById(id).innerHTML =
+        (value ?? '–') + (unit ? `<small>${unit}</small>` : '');
+    };
+    set('mVideo', stats.videoBitrateKbps, 'kbps');
+    set('mFps', stats.fps);
+    set('mRtt', stats.rttMs, 'ms');
+    set('mLoss', (stats.packetLossPercent ?? 0).toFixed(1), '%');
+    const seconds = stats.uptimeSeconds ?? 0;
+    set('mUptime', String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0'));
+  }
+
+  function renderIngest(ingest, state) {
+    document.getElementById('monAvailable').innerHTML = ingest.available
+      ? '<span class="ok-text">igen</span>' : '<span class="err">nem — nem fut a MediaMTX</span>';
+    document.getElementById('monFlowing').innerHTML = ingest.flowing
+      ? '<span class="ok-text">érkezik</span>'
+      : (ingest.stalled ? '<span class="err">megállt (a publisher csatlakozva van)</span>' : 'nincs');
+    document.getElementById('monTracks').textContent = (ingest.tracks ?? []).join(', ') || '–';
+    document.getElementById('monReaders').textContent = ingest.readers ?? 0;
+    document.getElementById('monState').textContent = state;
+  }
+
+  function renderCapture(capture) {
+    document.getElementById('monCapture').textContent =
+      `${capture.resolution ?? '?'}@${capture.fps ?? '?'} · ${capture.videoBitrateKbps ?? '?'} kbps · ` +
+      `${capture.source ?? '?'} / ${capture.lens ?? '?'}`;
+
+    markActive('resChips', 'res', String(capture.resolution ?? '').startsWith('1440') ? 'P1440'
+      : String(capture.resolution ?? '').startsWith('1080') ? 'P1080'
+      : String(capture.resolution ?? '').startsWith('720') ? 'P720'
+      : String(capture.resolution ?? '').startsWith('480') ? 'P480' : null);
+    markActive('fpsChips', 'fps', String(capture.fps ?? ''));
+    markActive('lensChips', 'lens', String(capture.lens ?? ''));
+    markActive('sourceChips', 'source', String(capture.source ?? ''));
+    markActive('sampleChips', 'sample', String(capture.audio?.sampleRate ?? ''));
+
+    if (capture.videoBitrateKbps) {
+      document.getElementById('bitrate').value = capture.videoBitrateKbps;
+      document.getElementById('bitrateValue').textContent = capture.videoBitrateKbps + ' kbps';
+    }
+    if (capture.audio?.bitrateKbps) {
+      document.getElementById('audioBitrate').value = capture.audio.bitrateKbps;
+      document.getElementById('audioBitrateValue').textContent = capture.audio.bitrateKbps + ' kbps';
+    }
+  }
+
+  function markActive(containerId, key, value) {
+    for (const chip of document.querySelectorAll('#' + containerId + ' .chip')) {
+      chip.classList.toggle('active', value != null && chip.dataset[key] === value);
+    }
+  }
+
+  // =========================================================================
+  //  Vezérlő gombok
+  // =========================================================================
+
+  document.getElementById('btnStart').addEventListener('click', () => post('/api/admin/device/start'));
+  document.getElementById('btnStop').addEventListener('click', () => {
+    if (confirm('Biztosan befejezed az adást? Az outro elindul, és a session lezárul.')) {
+      post('/api/admin/device/stop');
+    }
+  });
+  document.getElementById('btnPause').addEventListener('click', () => {
+    post(snapshot?.state === 'paused' ? '/api/admin/device/resume' : '/api/admin/device/pause');
+  });
+
+  for (const chip of document.querySelectorAll('#lensChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/lens', { lens: chip.dataset.lens }));
+  }
+  for (const chip of document.querySelectorAll('#sourceChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/source', { source: chip.dataset.source }));
+  }
+  for (const chip of document.querySelectorAll('#resChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/quality', { resolution: chip.dataset.res }));
+  }
+  for (const chip of document.querySelectorAll('#fpsChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/quality', { fps: Number(chip.dataset.fps) }));
+  }
+  for (const chip of document.querySelectorAll('#sampleChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/quality', { audioSampleRate: Number(chip.dataset.sample) }));
+  }
+
+  let torchOn = false;
+  document.getElementById('btnTorch').addEventListener('click', () => {
+    torchOn = !torchOn;
+    post('/api/admin/device/torch', { on: torchOn });
+  });
+  document.getElementById('btnPhoto').addEventListener('click', () => post('/api/admin/device/photo'));
+  document.getElementById('btnRecording').addEventListener('click', () => post('/api/admin/device/recording'));
+
+  /** Csúszkák: húzás közben csak a felirat frissül, kérés az elengedéskor megy. */
+  function slider(id, labelId, unit, send) {
+    const input = document.getElementById(id);
+    const label = document.getElementById(labelId);
+    input.addEventListener('input', () => { label.textContent = input.value + ' ' + unit; });
+    input.addEventListener('change', () => send(Number(input.value)));
+  }
+  slider('bitrate', 'bitrateValue', 'kbps', (value) => post('/api/admin/device/quality', { videoBitrateKbps: value }));
+  slider('audioBitrate', 'audioBitrateValue', 'kbps', (value) => post('/api/admin/device/quality', { audioBitrateKbps: value }));
+
+  // =========================================================================
+  //  Monitor: eszköz-jelenlét, linkek, előzmény
+  // =========================================================================
+
+  function renderDevice(status) {
+    const pill = document.getElementById('devicePill');
+    pill.className = 'pill ' + (status.online ? 'on' : 'off');
+    pill.textContent = 'telefon: ' + (status.online ? 'kapcsolódva' : 'nem jelentkezik');
+
+    const since = status.lastSeenAt
+      ? Math.round((Date.now() - status.lastSeenAt) / 1000) + ' mp-e' : 'még sosem';
+    document.getElementById('monDevice').textContent =
+      (status.device ?? 'ismeretlen eszköz') + ' · utoljára: ' + since +
+      (status.pending ? ` · ${status.pending} parancs várakozik` : '');
+  }
+
+  async function loadDevice() {
+    try {
+      const response = await fetch('/api/admin/device', { headers: headers() });
+      if (response.ok) renderDevice(await response.json());
+    } catch { /* offline admin — a következő körben újra */ }
+  }
+
+  function renderLinks() {
+    const origin = location.origin;
+    const live = origin.replace('//admin.', '//live.');
+    const rows = [
+      ['Live / OBS Browser Source', live + '/live'],
+      ['Live (böngészőben, fekete háttér)', live + '/live?bg=solid'],
+      ['Live diagnosztikával', live + '/live?debug=1&bg=solid'],
+      ['Admin felület', origin + '/admin'],
+      ['Health-check', origin + '/healthz'],
+    ];
+    document.getElementById('linkTable').innerHTML = rows.map(([name, url]) =>
+      `<tr><th>${name}</th><td><a class="mono" href="${url}" target="_blank" data-copy="${url}">${url}</a></td></tr>`,
+    ).join('');
+
+    for (const link of document.querySelectorAll('#linkTable a')) {
+      link.addEventListener('click', async (event) => {
+        event.preventDefault();
+        try { await navigator.clipboard.writeText(link.dataset.copy); toast('Másolva'); }
+        catch { window.open(link.dataset.copy, '_blank'); }
+      });
+    }
+  }
+
+  async function loadTransitions() {
+    try {
+      const response = await fetch('/api/admin/transitions?limit=60', { headers: headers() });
+      if (!response.ok) return;
+      const rows = (await response.json()).reverse();
+      document.getElementById('logTable').innerHTML = rows.length
+        ? rows.map((row) => `<tr>
+            <td class="when">${new Date(row.at).toLocaleTimeString('hu-HU')}</td>
+            <td>${row.from} <span class="arrow">→</span> <b>${row.to}</b></td>
+            <td class="note">${row.event}</td>
+            <td class="note">${row.source}</td>
+          </tr>`).join('')
+        : '<tr><td class="empty">Még nincs átmenet.</td></tr>';
+    } catch { /* ignoráljuk */ }
+  }
+
+  // =========================================================================
+  //  Indulás
+  // =========================================================================
+
+  document.getElementById('password').value = password.get();
+  document.getElementById('password').addEventListener('change', (event) => {
+    password.set(event.target.value);
+    loadDevice();
+    toast('Jelszó mentve');
+  });
+
+  const socket = io({ query: { role: 'admin' } });
+  socket.on('onlive:state', renderState);
+  socket.on('onlive:stats', renderStats);
+  socket.on('onlive:ingest', (ingest) => renderIngest(ingest, snapshot?.state ?? '–'));
+  socket.on('onlive:transition', () => {
+    if (document.getElementById('panel-monitor').classList.contains('active')) loadTransitions();
+  });
+  socket.on('disconnect', () => toast('Megszakadt a kapcsolat a szerverrel', true));
+
+  renderLinks();
+  loadDevice();
+  setInterval(loadDevice, 4000);
+  setInterval(() => { if (snapshot) renderState(snapshot); }, 1000);
+})();
+</script>
+</body>
+</html>

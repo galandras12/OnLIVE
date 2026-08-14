@@ -19,10 +19,12 @@ import { IngestMonitor } from './ingest/monitor.js';
 import { IngestControl } from './ingest/control.js';
 import { MediaStore } from './media/store.js';
 import { OverlayStore } from './overlay/store.js';
+import { DeviceCommandQueue } from './device/commands.js';
 import { createRoutes } from './api/routes.js';
 import { createMediaRoutes } from './api/media.js';
 import { createOverlayRoutes } from './api/overlay.js';
 import { createStreamProxyRoutes } from './api/stream-proxy.js';
+import { createDeviceRoutes } from './api/device.js';
 import { liveAuth as liveAuthFactory } from './api/auth.js';
 import { attachSocket } from './realtime/socket.js';
 import { readFileSync } from 'node:fs';
@@ -32,6 +34,8 @@ const startedAt = Date.now();
 const store = new Store(config.dataDir, logger);
 const mediaStore = new MediaStore({ dataDir: config.dataDir, logger });
 const overlayStore = new OverlayStore({ dataDir: config.dataDir, logger });
+/** A web UI → telefon parancscsatorna (8. szegmens). */
+const commands = new DeviceCommandQueue({ logger });
 const monitor = new IngestMonitor({ config, logger });
 const ingestControl = new IngestControl({ config, logger });
 
@@ -73,7 +77,8 @@ app.use((req, res, next) => {
  */
 const liveAuth = liveAuthFactory(config);
 
-app.use(createRoutes({ config, controller, monitor, store, logger, startedAt }));
+app.use(createRoutes({ config, controller, monitor, store, commands, logger, startedAt }));
+app.use(createDeviceRoutes({ config, controller, commands, logger }));
 app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth }));
 app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth }));
 app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
@@ -106,8 +111,14 @@ app.get('/live', liveAuth, (req, res) => {
   );
 });
 
-/** Média-kezelő felület. A teljes admin UI a 8. szegmensben épül köré. */
-app.get('/admin', (req, res) => res.redirect('/admin/media'));
+/**
+ * Admin felület (8. szegmens).
+ *
+ * A `/admin` a teljes vezérlőfelület; az al-oldalak (média, OBS, overlay)
+ * önállóan is megnyithatók, és fülként be vannak ágyazva ide.
+ */
+app.get('/admin.css', (req, res) => res.type('text/css').send(page('admin.css')));
+app.get('/admin', (req, res) => res.type('html').send(page('admin.html')));
 app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
 app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
@@ -117,12 +128,9 @@ app.get('/', (req, res) => {
     `<!doctype html><meta charset="utf-8"><title>OnLIVE</title>` +
       `<body style="font-family:system-ui;background:#0B0D10;color:#e5e7eb;padding:2rem">` +
       `<h1>OnLIVE</h1><p>A vezérlő szerver fut.</p>` +
-      `<ul><li><a style="color:#f43f5e" href="/live">/live</a> — kompozit lejátszó (ideiglenes)</li>` +
-      `<li><a style="color:#f43f5e" href="/admin/media">/admin/media</a> — intro/outro/megszakadt média</li>` +
-      `<li><a style="color:#f43f5e" href="/admin/obs">/admin/obs</a> — OBS Browser Source beállítás</li>` +
-      `<li><a style="color:#f43f5e" href="/admin/overlay">/admin/overlay</a> — widget szerkesztő</li>` +
-      `<li><a style="color:#f43f5e" href="/healthz">/healthz</a> — állapot</li></ul>` +
-      `<p style="color:#6b7280">A teljes admin felület a 8. szegmensben készül el.</p></body>`,
+      `<ul><li><a style="color:#f43f5e" href="/admin">/admin</a> — vezérlőfelület</li>` +
+      `<li><a style="color:#f43f5e" href="/live">/live</a> — kompozit lejátszó (OBS Browser Source)</li>` +
+      `<li><a style="color:#f43f5e" href="/healthz">/healthz</a> — állapot</li></ul></body>`,
   );
 });
 
@@ -147,9 +155,7 @@ function banner() {
   console.log(`${c.magenta}│${c.reset}  Helyi:   http://localhost:${config.port}`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Admin:   ${config.publicUrls.admin}`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Live:    ${config.publicUrls.live}/live`.padEnd(70) + `${c.magenta}│${c.reset}`);
-  console.log(`${c.magenta}│${c.reset}  Média:   ${config.publicUrls.admin}/admin/media`.padEnd(70) + `${c.magenta}│${c.reset}`);
-  console.log(`${c.magenta}│${c.reset}  OBS:     ${config.publicUrls.admin}/admin/obs`.padEnd(70) + `${c.magenta}│${c.reset}`);
-  console.log(`${c.magenta}│${c.reset}  Overlay: ${config.publicUrls.admin}/admin/overlay`.padEnd(70) + `${c.magenta}│${c.reset}`);
+  console.log(`${c.magenta}│${c.reset}  Vezérlés:${config.publicUrls.admin}/admin`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Ingest:  ${config.publicUrls.ingest}/${config.ingest.path}/whip`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}└${line}┘${c.reset}\n`);
 

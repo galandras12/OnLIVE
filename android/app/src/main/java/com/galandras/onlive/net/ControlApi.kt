@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -53,8 +54,20 @@ class ControlApi(
     suspend fun sessionConfig(settings: Settings): Result<Unit> =
         post(settings, "config", settingsPayload(settings))
 
-    suspend fun sessionStats(settings: Settings, stats: StreamStats, state: String): Result<Unit> =
-        post(
+    /**
+     * Telemetria felküldése — és a VÁLASZBAN a szerver által ránk váró
+     * parancsok (8. szegmens).
+     *
+     * A web UI-ról indított kamera-váltás, minőség-állítás vagy „Befejezés"
+     * így plusz kérés nélkül, legfeljebb egy telemetria-ciklusnyi (3 mp)
+     * késéssel jut el ide.
+     */
+    suspend fun sessionStats(
+        settings: Settings,
+        stats: StreamStats,
+        state: String,
+    ): Result<List<RemoteCommand>> =
+        postForCommands(
             settings,
             "stats",
             JSONObject()
@@ -88,6 +101,49 @@ class ControlApi(
         .put("streamPath", s.streamPath)
         .put("device", "${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})")
 
+    /** Ugyanaz, mint a [post], de a válaszból kiolvassa a parancsokat is. */
+    private suspend fun postForCommands(
+        settings: Settings,
+        endpoint: String,
+        body: JSONObject,
+    ): Result<List<RemoteCommand>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = "${settings.controlBaseUrl.trimEnd('/')}/api/session/$endpoint"
+            val request = Request.Builder()
+                .url(url)
+                .post(body.toString().toRequestBody(JSON))
+                .apply {
+                    if (settings.streamKey.isNotBlank()) {
+                        header("Authorization", "Bearer ${settings.streamKey}")
+                    }
+                }
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("$endpoint → HTTP ${response.code}")
+                parseCommands(response.body?.string())
+            }
+        }.onFailure {
+            Log.w(TAG, "session/$endpoint sikertelen: ${it.message}")
+        }
+    }
+
+    private fun parseCommands(payload: String?): List<RemoteCommand> {
+        if (payload.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val array: JSONArray = JSONObject(payload).optJSONArray("commands") ?: return emptyList()
+            (0 until array.length()).mapNotNull { index ->
+                val item = array.optJSONObject(index) ?: return@mapNotNull null
+                val type = item.optString("type").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                RemoteCommand(
+                    id = item.optString("id"),
+                    type = type,
+                    payload = item.optJSONObject("payload") ?: JSONObject(),
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
     private suspend fun post(settings: Settings, endpoint: String, body: JSONObject): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -117,5 +173,30 @@ class ControlApi(
     companion object {
         private const val TAG = "OnLIVE/Control"
         private val JSON = "application/json; charset=utf-8".toMediaType()
+    }
+}
+
+/**
+ * A vezérlő szervertől érkező parancs (8. szegmens).
+ *
+ * A telefon SEMMIT nem értelmez az adás állapotgépéből — ezek konkrét,
+ * végrehajtandó műveletek, ugyanazok, amiket a telefon gombjai is kiváltanak.
+ */
+data class RemoteCommand(
+    val id: String,
+    val type: String,
+    val payload: JSONObject,
+) {
+    companion object {
+        const val START = "start"
+        const val PAUSE = "pause"
+        const val RESUME = "resume"
+        const val STOP = "stop"
+        const val SET_LENS = "setLens"
+        const val SET_SOURCE = "setSource"
+        const val SET_QUALITY = "setQuality"
+        const val TORCH = "torch"
+        const val PHOTO = "photo"
+        const val RECORDING = "recording"
     }
 }

@@ -10,10 +10,15 @@ import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.galandras.onlive.net.ControlApi
+import com.galandras.onlive.net.RemoteCommand
 import com.galandras.onlive.settings.AppSettings
+import com.galandras.onlive.settings.AudioBitrate
+import com.galandras.onlive.settings.AudioSampleRate
 import com.galandras.onlive.settings.CaptureSource
+import com.galandras.onlive.settings.FrameRate
 import com.galandras.onlive.settings.LensKind
 import com.galandras.onlive.settings.Settings
+import com.galandras.onlive.settings.VideoResolution
 import com.galandras.onlive.util.Notifications
 import com.galandras.onlive.util.TorchController
 import com.galandras.onlive.webrtc.RtcEngine
@@ -259,11 +264,9 @@ class StreamService : LifecycleService() {
                 delay(STATS_INTERVAL_MS)
                 val stats = engine?.collectStats() ?: continue
                 StreamBus.update { it.copy(stats = stats) }
-                controlApi.sessionStats(
-                    settings,
-                    stats,
-                    StreamBus.state.value.connection.name.lowercase(),
-                )
+                controlApi
+                    .sessionStats(settings, stats, StreamBus.state.value.connection.name.lowercase())
+                    .onSuccess { commands -> commands.forEach { handleRemoteCommand(it) } }
             }
         }
     }
@@ -415,6 +418,83 @@ class StreamService : LifecycleService() {
             CaptureSource.SCREEN -> screenSource?.startLocalRecording(settings, withAudio)
         }
         result?.onFailure { StreamBus.setMessage(it.message) }
+    }
+
+    // -----------------------------------------------------------------------
+    // Távoli parancsok a web UI-ról (8. szegmens)
+    // -----------------------------------------------------------------------
+
+    /**
+     * A vezérlő szervertől kapott parancs végrehajtása.
+     *
+     * Ugyanazokat a belső kezelőket hívja, mint a telefon gombjai — így a két
+     * felület garantáltan ugyanazt csinálja. Az adás állapotát továbbra is a
+     * szerver állapotgépe dönti el; ez csak a KÉSZÜLÉK oldali végrehajtás.
+     *
+     * Miért kell: ha az admin a weben nyomja meg a „Befejezés"-t, az app enélkül
+     * tovább publikálna és „ÉLŐ"-t mutatna egy már lezárt adás alatt.
+     */
+    private fun handleRemoteCommand(command: RemoteCommand) {
+        Log.i(TAG, "Távoli parancs: ${command.type}")
+
+        when (command.type) {
+            RemoteCommand.START -> handleStart(Intent())
+            RemoteCommand.PAUSE -> handlePause()
+            RemoteCommand.RESUME -> handleResume()
+            RemoteCommand.STOP -> handleStop()
+
+            RemoteCommand.SET_LENS -> {
+                val lens = command.payload.optString("lens").uppercase()
+                handleSwitchLens(Intent().putExtra(EXTRA_LENS, lens))
+            }
+
+            RemoteCommand.SET_SOURCE -> {
+                val source = command.payload.optString("source")
+                if (source.equals("screen", ignoreCase = true)) {
+                    // Az Android képernyő-megosztáshoz felhasználói hozzájárulást
+                    // követel, amit távolról nem lehet megkerülni: ha nincs
+                    // korábbi engedélyünk, jelezzük, hogy a telefonon kell
+                    // megerősíteni.
+                    if (screenPermission == null) {
+                        StreamBus.setMessage(
+                            "A vezérlő képernyő-megosztást kért — erősítsd meg a telefonon.",
+                        )
+                    } else {
+                        handleSetSource(sourceIntent(CaptureSource.SCREEN))
+                    }
+                } else {
+                    handleSetSource(sourceIntent(CaptureSource.CAMERA))
+                }
+            }
+
+            RemoteCommand.SET_QUALITY -> lifecycleScope.launch {
+                val payload = command.payload
+                payload.optString("resolution").takeIf { it.isNotBlank() }?.let {
+                    appSettings.setResolution(VideoResolution.fromName(it))
+                }
+                payload.optInt("fps", 0).takeIf { it > 0 }?.let {
+                    appSettings.setFrameRate(FrameRate.fromFps(it))
+                }
+                payload.optInt("videoBitrateKbps", 0).takeIf { it > 0 }?.let {
+                    appSettings.setVideoBitrate(it)
+                }
+                payload.optInt("audioSampleRate", 0).takeIf { it > 0 }?.let {
+                    appSettings.setAudioSampleRate(AudioSampleRate.fromHz(it))
+                }
+                payload.optInt("audioBitrateKbps", 0).takeIf { it > 0 }?.let {
+                    appSettings.setAudioBitrate(AudioBitrate.fromKbps(it))
+                }
+                handleApplySettings()
+            }
+
+            RemoteCommand.TORCH ->
+                handleTorch(Intent().putExtra(EXTRA_TORCH_ON, command.payload.optBoolean("on")))
+
+            RemoteCommand.PHOTO -> handlePhoto()
+            RemoteCommand.RECORDING -> handleToggleRecording()
+
+            else -> Log.w(TAG, "Ismeretlen távoli parancs: ${command.type}")
+        }
     }
 
     // -----------------------------------------------------------------------
