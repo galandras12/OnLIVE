@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · OBS</title>
+<style>
+  :root { --bg:#0B0D10; --panel:#12161c; --border:#1f2937; --text:#e5e7eb; --muted:#9ca3af; --accent:#e11d48; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.55; }
+  header { padding:1.25rem 1.5rem; border-bottom:1px solid var(--border); display:flex; gap:1rem; align-items:baseline; }
+  h1 { margin:0; font-size:1.25rem; } h1 span { color:var(--accent); }
+  nav { margin-left:auto; font-size:.85rem; } nav a { color:var(--muted); text-decoration:none; margin-left:1rem; }
+  nav a:hover { color:var(--text); }
+  main { padding:1.5rem; display:grid; gap:1.25rem; max-width:900px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:1.25rem; }
+  h2 { margin:0 0 .5rem; font-size:1rem; }
+  p { margin:0 0 .75rem; color:var(--muted); font-size:.9rem; }
+  .url { display:flex; gap:.5rem; align-items:center; }
+  input[type=text] { flex:1; background:#0b0f14; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:.55rem .7rem; font-family:ui-monospace,Menlo,monospace; font-size:.85rem; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:.5rem .9rem; font-size:.85rem; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  td, th { text-align:left; padding:.4rem .5rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; width:42%; }
+  code { background:#0b0f14; padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+  ol { margin:0; padding-left:1.2rem; font-size:.9rem; }
+  li { margin-bottom:.35rem; }
+  .ok { color:#10b981; } .warn { color:#f59e0b; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>OnLIVE</span> — Admin · OBS</h1>
+  <nav><a href="/admin/media">Média</a><a href="/live?bg=solid" target="_blank">Live oldal</a></nav>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>Browser Source URL</h2>
+    <p>Ezt másold be az OBS-ben a Browser Source <strong>URL</strong> mezőjébe.</p>
+    <div class="url">
+      <input type="text" id="browserUrl" readonly>
+      <button id="copyUrl">Másolás</button>
+    </div>
+    <p style="margin-top:.75rem" id="tokenNote"></p>
+  </div>
+
+  <div class="card">
+    <h2>OBS beállítások</h2>
+    <table>
+      <tr><th>Szélesség × Magasság</th><td><code>1920 × 1080</code> — a vászon fix, az oldal ehhez skálázza magát</td></tr>
+      <tr><th>FPS</th><td><code>30</code> (vagy 60, ha a stream is annyi)</td></tr>
+      <tr><th>Egyéni CSS</th><td>hagyd üresen — az oldal háttere alapból átlátszó</td></tr>
+      <tr><th>Forrás leállítása, ha nem látható</th><td><span class="warn">KI</span> — különben jelenetváltáskor újraindul a lejátszó, és pár másodperc kiesik</td></tr>
+      <tr><th>Böngésző frissítése jelenetváltáskor</th><td><span class="warn">KI</span> — ugyanezért</td></tr>
+      <tr><th>Hang vezérlése az OBS-en keresztül</th><td><span class="ok">BE</span>, ha az adás hangját is az OBS-ben szeretnéd keverni</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Lépések</h2>
+    <ol>
+      <li>OBS → <em>Források</em> → <strong>+</strong> → <em>Böngésző</em> (Browser Source).</li>
+      <li>URL: a fenti cím. Méret: 1920 × 1080.</li>
+      <li>Vedd ki a pipát a „Forrás leállítása, ha nem látható” és a „Böngésző frissítése…” opciókról.</li>
+      <li>OK. A forrás azonnal az aktuális állapotot mutatja: intro, élő kép, „Megszakadt”, vagy outro.</li>
+      <li>Nincs szükség jelenetváltásra: az OnLIVE szerver vált tartalmat, az OBS-ben minden marad egy forráson.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Változatok</h2>
+    <table>
+      <tr><th><code>?bg=solid</code></th><td>fekete háttér átlátszó helyett — önálló böngészős nézéshez</td></tr>
+      <tr><th><code>?debug=1</code></th><td>a lejátszó állapota látszik a jobb alsó sarokban (beállításkor hasznos)</td></tr>
+      <tr><th><code>?player=hls</code></th><td>kényszerített HLS lejátszás, ha a WebRTC nem jön össze</td></tr>
+      <tr><th><code>?player=whep</code></th><td>kényszerített WebRTC (nincs automatikus HLS-re váltás)</td></tr>
+      <tr><th><code>?preview=intro</code></th><td>rögzített képernyő előnézethez (intro / interrupted / outro / live)</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Ha nincs kép</h2>
+    <p>
+      Nyisd meg a <code>?debug=1</code> változatot: a jobb alsó sarokban látszik,
+      hogy a lejátszó mit csinál. Ha „Újracsatlakozás…” marad WebRTC módban,
+      az szinte biztosan a médiaút hibája — a WHIP jelzés átmegy az alagúton,
+      a WebRTC média viszont nem, ahhoz TURN kell.
+    </p>
+  </div>
+
+</main>
+
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token') ?? '';
+  const base = location.origin.replace(/^https?:\/\/admin\./, (m) => m.replace('admin.', 'live.'));
+
+  const url = base + '/live' + (token ? '?token=' + encodeURIComponent(token) : '');
+  document.getElementById('browserUrl').value = url;
+
+  document.getElementById('tokenNote').innerHTML = token
+    ? 'A cím tartalmazza a lejátszási tokent — úgy kezeld, mint egy jelszót.'
+    : 'A <code>/live</code> oldal jelenleg nyilvános. Tokenes védelemhez állítsd be az ' +
+      '<code>ONLIVE_LIVE_TOKEN</code> értékét, majd nyisd meg ezt az oldalt ' +
+      '<code>?token=…</code> paraméterrel.';
+
+  document.getElementById('copyUrl').addEventListener('click', async () => {
+    const button = document.getElementById('copyUrl');
+    try {
+      await navigator.clipboard.writeText(url);
+      button.textContent = 'Másolva';
+    } catch {
+      document.getElementById('browserUrl').select();
+      button.textContent = 'Jelöld ki és másold';
+    }
+    setTimeout(() => { button.textContent = 'Másolás'; }, 2000);
+  });
+})();
+</script>
+</body>
+</html>

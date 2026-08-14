@@ -25,10 +25,24 @@ export const config = {
   adminPassword: process.env.ONLIVE_ADMIN_PASSWORD ?? '',
   hookSecret: process.env.ONLIVE_HOOK_SECRET ?? '',
 
+  /**
+   * A `/live` oldal és a lejátszás-proxy védelme (6. szegmens).
+   *
+   * Üresen hagyva a `/live` NYILVÁNOS — ez a kényelmes alapértelmezés, mert
+   * az OBS Browser Source-ba így elég a puszta URL. Ha megadod, minden
+   * lejátszási kérésnek vinnie kell (`?token=…`), és a Socket.io kapcsolat
+   * is ezt kéri.
+   */
+  liveToken: process.env.ONLIVE_LIVE_TOKEN ?? '',
+
   /** Media ingest (3. szegmens). */
   ingest: {
     apiBase: process.env.ONLIVE_MEDIAMTX_API ?? 'http://127.0.0.1:9997',
     path: process.env.ONLIVE_STREAM_PATH ?? 'onlive',
+    /** WHEP (WebRTC olvasás) — a lejátszás-proxy célja. */
+    whepPort: num(process.env.ONLIVE_MEDIAMTX_WHIP_PORT, 8889),
+    /** HLS — tartalék lejátszási útvonal. */
+    hlsPort: num(process.env.ONLIVE_MEDIAMTX_HLS_PORT, 8888),
     pollMs: num(process.env.ONLIVE_INGEST_POLL_MS, 1000),
     /**
      * Ennyi ideig tartó folyamatos „nincs adat" után jelentünk megszakadást.

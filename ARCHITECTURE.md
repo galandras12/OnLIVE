@@ -130,6 +130,9 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
 - **Hitelesítés és jogosultság:** admin jelszó, ingest streamkulcs kiadása/ellenőrzése
   (részletek: 10. szegmens).
 - **Statikus kiszolgálás:** az admin UI és a `/live` oldal kiszolgálása.
+- **Lejátszás-proxy:** WHEP és HLS továbbítása a MediaMTX felé, hogy a
+  böngésző egyetlen originnel beszéljen, és a MediaMTX olvasási joga
+  localhostra szorítva maradhasson (6. szegmens).
 - **Indítási visszajelzés:** a `start.bat`-tal indított konzolban keretezett
   „OnLIVE szerver elindult” üzenet az elérhető URL-ekkel (11. szegmens).
 
@@ -159,6 +162,9 @@ Két, egymástól élesen elváló felület, azonos szerverről kiszolgálva:
   (átlátszó háttér opció, nincs benne interaktív vezérlőelem, nincs görgetősáv),
   és önálló weblejátszóként is megnyitható legyen.
 - Az állapotot WebSocketen kapja; nem kérdezget, nem dönt — csak renderel.
+- Fix **1920×1080-as vászon**, a Browser Source ablakához skálázva; a háttér
+  alapból átlátszó. Az élő videó WHEP-en (HLS tartalékkal), a vezérlő szerver
+  proxyján keresztül érkezik (**[`docs/OBS.md`](docs/OBS.md)**, 6. szegmens).
 - HTML `<title>`: **`OnLIVE`** (vagy `OnLIVE — Live`).
 
 ## 3. Névhasználat (kötelező minden felületen)
@@ -209,7 +215,8 @@ OnLIVE/
 │   ├── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
 │   ├── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
 │   ├── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
-│   └── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
+│   ├── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
+│   └── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -226,6 +233,7 @@ OnLIVE/
 │   ├── src/state/             # ★ machine.js (tiszta), controller.js, store.js
 │   ├── src/ingest/            # monitor.js (poll, debounce) + control.js (kick)
 │   ├── src/media/             # média-tár és tartalom-alapú validáció
+│   ├── src/overlay/           # overlay-elrendezés (widgetek a fix vásznon)
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
@@ -254,7 +262,7 @@ A teljes, előre rögzített szegmens-lista:
 | 3 | Media ingest réteg beállítása | ingest | ✅ kész |
 | 4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
-| 6 | OBS integráció (Browser Source) | web | ⬜ hátravan |
+| 6 | OBS integráció (Browser Source) | web | ✅ kész |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ⬜ hátravan |
 | 8 | Web UI: admin/vezérlő felület | web | ⬜ hátravan |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ⬜ hátravan |

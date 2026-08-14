@@ -61,6 +61,34 @@ export function hookAuth(config, logger) {
 }
 
 /**
+ * A `/live` oldal és a lejátszás-proxy (6. szegmens).
+ *
+ * Ha nincs `ONLIVE_LIVE_TOKEN` beállítva, a végpont NYILVÁNOS — így az OBS-be
+ * elég a puszta URL. Ha van, elfogadjuk a `?token=` paramétert, a
+ * `X-OnLIVE-Live-Token` fejlécet, vagy az admin jelszót (hogy az admin
+ * felület beágyazott előnézete külön token nélkül is működjön).
+ */
+export function liveAuth(config) {
+  return (req, res, next) => {
+    if (!config.liveToken) return next();
+
+    const supplied = String(req.query.token ?? req.get('x-onlive-live-token') ?? '');
+    if (equals(supplied, config.liveToken)) return next();
+
+    const adminSupplied = req.get('x-onlive-admin-password') ?? '';
+    if (config.adminPassword && equals(adminSupplied, config.adminPassword)) return next();
+
+    return res.status(401).json({ error: 'Érvénytelen vagy hiányzó lejátszási token.' });
+  };
+}
+
+/** Ugyanaz a szabály, de Socket.io handshake-hez (nem express-middleware). */
+export function isLiveTokenValid(config, token) {
+  if (!config.liveToken) return true;
+  return equals(String(token ?? ''), config.liveToken);
+}
+
+/**
  * Az admin felület. Ideiglenes megoldás a 10. szegmensig: jelszó fejlécben
  * vagy Bearerként. Ha nincs jelszó beállítva, kizárólag localhostról enged.
  */

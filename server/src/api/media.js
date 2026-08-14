@@ -19,7 +19,10 @@ import { adminAuth } from './auth.js';
 /** 512 MB — egy intro/outro videóhoz bőven elég, de nem engedi a lemezt megtölteni. */
 const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
-export function createMediaRoutes({ config, mediaStore, controller, logger }) {
+export function createMediaRoutes({ config, mediaStore, controller, logger, liveAuth }) {
+  // Ha a `/live` tokennel védett, a médiafájlok is azok — különben az intro
+  // és az outro videó token nélkül letölthető maradna.
+  const guard = liveAuth ?? ((req, res, next) => next());
   const router = Router();
 
   const upload = multer({
@@ -107,7 +110,7 @@ export function createMediaRoutes({ config, mediaStore, controller, logger }) {
   //  Nyilvános: manifest és fájlkiszolgálás
   // =========================================================================
 
-  router.get('/api/media', (req, res) => res.json(mediaStore.manifest()));
+  router.get('/api/media', guard, (req, res) => res.json(mediaStore.manifest()));
 
   /**
    * A médiafájl kiszolgálása.
@@ -116,7 +119,7 @@ export function createMediaRoutes({ config, mediaStore, controller, logger }) {
    * videónál részleges letöltéssel indulnak — Range támogatás nélkül egyes
    * lejátszók el sem indítják az mp4-et.
    */
-  router.get('/media/:slot', async (req, res) => {
+  router.get('/media/:slot', guard, async (req, res) => {
     const { slot } = req.params;
     if (!SLOTS.includes(slot)) return res.status(404).end();
 

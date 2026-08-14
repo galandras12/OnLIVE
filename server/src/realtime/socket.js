@@ -16,6 +16,7 @@
  */
 
 import { Server } from 'socket.io';
+import { isLiveTokenValid } from '../api/auth.js';
 
 export const SocketEvents = Object.freeze({
   /** Teljes pillanatkép — csatlakozáskor és minden változáskor. */
@@ -38,6 +39,11 @@ export const SocketEvents = Object.freeze({
    * Enélkül egy már megnyitott OBS Browser Source a régi fájlt mutatná.
    */
   MEDIA: 'onlive:media',
+  /**
+   * Overlay-elrendezés (6. szegmens): widget mozgatása, ki-be kapcsolása.
+   * Ettől frissül a Browser Source újratöltés nélkül.
+   */
+  OVERLAY: 'onlive:overlay',
 });
 
 const ENTER_EVENT = {
@@ -63,10 +69,17 @@ function publicView(snapshot) {
   };
 }
 
-export function attachSocket(httpServer, { controller, mediaStore, logger }) {
+export function attachSocket(httpServer, { controller, mediaStore, overlayStore, config, logger }) {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
     serveClient: true,
+  });
+
+  // Ha a `/live` tokennel védett, a socket kapcsolat is azt kéri — különben
+  // az állapot-folyam token nélkül is kiolvasható lenne.
+  io.use((socket, next) => {
+    if (isLiveTokenValid(config ?? {}, socket.handshake.query?.token)) return next();
+    next(new Error('Érvénytelen lejátszási token.'));
   });
 
   io.on('connection', (socket) => {
@@ -78,6 +91,7 @@ export function attachSocket(httpServer, { controller, mediaStore, logger }) {
     const snapshot = controller.snapshot();
     socket.emit(SocketEvents.STATE, role === 'admin' ? snapshot : publicView(snapshot));
     if (mediaStore) socket.emit(SocketEvents.MEDIA, mediaStore.manifest());
+    if (overlayStore) socket.emit(SocketEvents.OVERLAY, overlayStore.manifest());
 
     socket.on('disconnect', (reason) => {
       logger.info(`Socket lecsatlakozott: ${socket.id} (${reason})`);
@@ -86,6 +100,10 @@ export function attachSocket(httpServer, { controller, mediaStore, logger }) {
 
   controller.on('media', (manifest) => {
     io.emit(SocketEvents.MEDIA, manifest);
+  });
+
+  controller.on('overlay', (manifest) => {
+    io.emit(SocketEvents.OVERLAY, manifest);
   });
 
   controller.on('change', (snapshot, result) => {
