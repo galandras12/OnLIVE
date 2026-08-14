@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · Média</title>
+<style>
+  :root {
+    --bg: #0B0D10; --panel: #12161c; --border: #1f2937;
+    --text: #e5e7eb; --muted: #9ca3af; --accent: #e11d48; --ok: #10b981;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+  header {
+    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+  }
+  h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  .state-pill {
+    margin-left: auto; font-size: .8rem; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 999px; padding: .2rem .7rem;
+  }
+  main { padding: 1.5rem; display: grid; gap: 1.5rem; max-width: 1100px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card h2 { margin: 0 0 .25rem; font-size: 1rem; }
+  .card p.hint { margin: 0 0 1rem; color: var(--muted); font-size: .85rem; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+  label { font-size: .85rem; color: var(--muted); }
+  input[type=file] { font-size: .85rem; max-width: 100%; }
+  input[type=number], select {
+    background: #0b0f14; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: .4rem .6rem; font-size: .9rem;
+  }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: .45rem .9rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .meta { font-size: .78rem; color: var(--muted); margin-top: .5rem; }
+  .status { font-size: .8rem; margin-top: .5rem; min-height: 1.2em; }
+  .status.err { color: #f87171; }
+  .status.ok { color: var(--ok); }
+  iframe {
+    width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--border);
+    border-radius: 10px; background: #000;
+  }
+  .toggles { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: .75rem; font-size: .8rem; }
+  .toggles label { color: var(--text); display: flex; align-items: center; gap: .35rem; }
+  .note { color: var(--muted); font-size: .8rem; }
+  code { background: #0b0f14; padding: .1rem .35rem; border-radius: 4px; font-size: .85em; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>OnLIVE</span> — Admin · Média</h1>
+  <div class="state-pill" id="statePill">állapot: …</div>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>Belépés</h2>
+    <p class="hint">
+      Az admin jelszó a böngészőben marad (localStorage), és minden kéréshez
+      elmegy. A teljes munkamenet-kezelés a 10. szegmensben készül el.
+    </p>
+    <div class="row">
+      <input type="password" id="password" placeholder="admin jelszó"
+             style="background:#0b0f14;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem">
+      <button id="savePassword">Mentés</button>
+      <span class="status" id="authStatus"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Outro hossza</h2>
+    <p class="hint">
+      Ennyi ideig megy az outro, utána a rendszer automatikusan
+      <code>ended</code> állapotba lép, és lezárja a session-t (a telefon
+      publisher-kapcsolatát is bontja). A szerver és a MediaMTX fut tovább.
+    </p>
+    <div class="row">
+      <input type="number" id="outroDuration" min="1" max="600" step="1" style="width:6rem">
+      <span class="note">másodperc</span>
+      <button id="saveDuration">Mentés</button>
+      <span class="status" id="durationStatus"></span>
+    </div>
+  </div>
+
+  <div class="grid" id="slots"></div>
+
+  <div class="card">
+    <h2>Előnézet</h2>
+    <p class="hint">
+      Pontosan azt mutatja, amit élesben mutatna — ugyanaz a <code>/live</code>
+      oldal fut benne, csak rögzített képernyővel. Feltöltés után frissítsd.
+    </p>
+    <div class="row" style="margin-bottom:.75rem">
+      <button class="ghost" data-preview="intro">Intro</button>
+      <button class="ghost" data-preview="interrupted">Megszakadt</button>
+      <button class="ghost" data-preview="outro">Outro</button>
+      <button class="ghost" data-preview="live">Élő</button>
+      <button class="ghost" data-preview="">Valós állapot</button>
+    </div>
+    <iframe id="preview" src="/live?preview=intro" title="Előnézet"></iframe>
+  </div>
+
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const SLOTS = [
+    { id: 'intro', title: 'Intro', hint: 'A „Hamarosan kezdünk” képernyő — amíg a telefon képe meg nem érkezik.' },
+    { id: 'interrupted', title: 'Megszakadt', hint: 'A reconnecting ÉS a paused állapot képernyője — szándékosan ugyanaz.' },
+    { id: 'outro', title: 'Outro', hint: 'A Befejezés után látható, a fent beállított ideig.' },
+  ];
+
+  const password = {
+    get: () => localStorage.getItem('onlive.admin') ?? '',
+    set: (value) => localStorage.setItem('onlive.admin', value),
+  };
+
+  const headers = () => ({ 'X-OnLIVE-Admin-Password': password.get() });
+
+  function setStatus(el, message, kind) {
+    el.textContent = message;
+    el.className = 'status' + (kind ? ' ' + kind : '');
+    if (message) setTimeout(() => { if (el.textContent === message) el.textContent = ''; }, 6000);
+  }
+
+  // --- slot kártyák ----------------------------------------------------------
+
+  document.getElementById('slots').innerHTML = SLOTS.map((slot) => `
+    <div class="card" data-slot="${slot.id}">
+      <h2>${slot.title}</h2>
+      <p class="hint">${slot.hint}</p>
+      <div class="row">
+        <input type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,.webm" data-role="file">
+        <button data-role="upload">Feltöltés</button>
+        <button class="ghost" data-role="delete">Törlés</button>
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" data-role="loop"> ismétlés</label>
+        <label><input type="checkbox" data-role="muted"> némítás</label>
+        <label>illesztés
+          <select data-role="fit">
+            <option value="cover">kitöltés (levág)</option>
+            <option value="contain">teljes kép (letterbox)</option>
+          </select>
+        </label>
+      </div>
+      <div class="meta" data-role="meta">nincs feltöltve</div>
+      <div class="status" data-role="status"></div>
+    </div>
+  `).join('');
+
+  const cards = {};
+  for (const slot of SLOTS) {
+    const card = document.querySelector(`[data-slot="${slot.id}"]`);
+    cards[slot.id] = card;
+
+    card.querySelector('[data-role=upload]').addEventListener('click', () => uploadSlot(slot.id));
+    card.querySelector('[data-role=delete]').addEventListener('click', () => deleteSlot(slot.id));
+    for (const role of ['loop', 'muted', 'fit']) {
+      card.querySelector(`[data-role=${role}]`).addEventListener('change', () => patchOptions(slot.id));
+    }
+  }
+
+  async function uploadSlot(id) {
+    const card = cards[id];
+    const input = card.querySelector('[data-role=file]');
+    const status = card.querySelector('[data-role=status]');
+    const file = input.files?.[0];
+    if (!file) return setStatus(status, 'Válassz fájlt.', 'err');
+
+    const form = new FormData();
+    form.append('file', file);
+
+    setStatus(status, 'Feltöltés…');
+    try {
+      const response = await fetch('/api/admin/media/' + id, {
+        method: 'POST', headers: headers(), body: form,
+      });
+      const body = await response.json();
+      if (!response.ok) return setStatus(status, body.error ?? 'Sikertelen feltöltés.', 'err');
+
+      input.value = '';
+      setStatus(status, 'Feltöltve.', 'ok');
+      // Videónál felajánljuk, hogy az outro hossza a videó hossza legyen.
+      if (id === 'outro' && body.media?.kind === 'video') suggestOutroDuration(body.media.url);
+      await loadManifest();
+      refreshPreview();
+    } catch (error) {
+      setStatus(status, error.message, 'err');
+    }
+  }
+
+  async function deleteSlot(id) {
+    const status = cards[id].querySelector('[data-role=status]');
+    const response = await fetch('/api/admin/media/' + id, { method: 'DELETE', headers: headers() });
+    if (!response.ok) return setStatus(status, 'Sikertelen törlés.', 'err');
+    setStatus(status, 'Törölve.', 'ok');
+    await loadManifest();
+    refreshPreview();
+  }
+
+  async function patchOptions(id) {
+    const card = cards[id];
+    const status = card.querySelector('[data-role=status]');
+    const body = {
+      loop: card.querySelector('[data-role=loop]').checked,
+      muted: card.querySelector('[data-role=muted]').checked,
+      fit: card.querySelector('[data-role=fit]').value,
+    };
+    const response = await fetch('/api/admin/media/' + id, {
+      method: 'PATCH',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return setStatus(status, 'A beállítás mentése nem sikerült.', 'err');
+    setStatus(status, 'Beállítás mentve.', 'ok');
+    refreshPreview();
+  }
+
+  /** Az outro videó tényleges hossza — kényelmi javaslat a beállításhoz. */
+  function suggestOutroDuration(url) {
+    const probe = document.createElement('video');
+    probe.preload = 'metadata';
+    probe.src = url;
+    probe.addEventListener('loadedmetadata', () => {
+      if (!Number.isFinite(probe.duration)) return;
+      const seconds = Math.ceil(probe.duration);
+      const status = document.getElementById('durationStatus');
+      const input = document.getElementById('outroDuration');
+      if (Number(input.value) !== seconds) {
+        input.value = seconds;
+        setStatus(status, `A videó hossza ${seconds} mp — mentsd, ha ezt szeretnéd.`, 'ok');
+      }
+    });
+  }
+
+  // --- manifest --------------------------------------------------------------
+
+  async function loadManifest() {
+    const response = await fetch('/api/media');
+    const manifest = await response.json();
+
+    document.getElementById('outroDuration').value = manifest.settings.outroDurationSeconds;
+
+    for (const slot of SLOTS) {
+      const card = cards[slot.id];
+      const entry = manifest.slots[slot.id];
+      const meta = card.querySelector('[data-role=meta]');
+
+      if (!entry) {
+        meta.textContent = 'nincs feltöltve — a tartalék szöveges képernyő látszik';
+        continue;
+      }
+      const size = (entry.size / 1024 / 1024).toFixed(1);
+      meta.textContent =
+        `${entry.originalName} · ${entry.kind === 'video' ? 'videó' : 'kép'} · ${entry.mime} · ${size} MB · ` +
+        `feltöltve: ${new Date(entry.uploadedAt).toLocaleString('hu-HU')}`;
+
+      card.querySelector('[data-role=loop]').checked = entry.options.loop !== false;
+      card.querySelector('[data-role=muted]').checked = entry.options.muted !== false;
+      card.querySelector('[data-role=fit]').value = entry.options.fit ?? 'cover';
+    }
+  }
+
+  // --- outro hossz -----------------------------------------------------------
+
+  document.getElementById('saveDuration').addEventListener('click', async () => {
+    const status = document.getElementById('durationStatus');
+    const seconds = Number(document.getElementById('outroDuration').value);
+    const response = await fetch('/api/admin/media/settings', {
+      method: 'POST',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outroDurationSeconds: seconds }),
+    });
+    const body = await response.json();
+    setStatus(status, response.ok ? 'Mentve.' : (body.error ?? 'Hiba'), response.ok ? 'ok' : 'err');
+  });
+
+  // --- jelszó ----------------------------------------------------------------
+
+  document.getElementById('password').value = password.get();
+  document.getElementById('savePassword').addEventListener('click', async () => {
+    password.set(document.getElementById('password').value);
+    const status = document.getElementById('authStatus');
+    const response = await fetch('/api/admin/media', { headers: headers() });
+    setStatus(status, response.ok ? 'Rendben.' : 'Érvénytelen jelszó.', response.ok ? 'ok' : 'err');
+  });
+
+  // --- előnézet --------------------------------------------------------------
+
+  const preview = document.getElementById('preview');
+  let previewScreen = 'intro';
+
+  for (const button of document.querySelectorAll('[data-preview]')) {
+    button.addEventListener('click', () => {
+      previewScreen = button.dataset.preview;
+      refreshPreview();
+    });
+  }
+
+  function refreshPreview() {
+    const base = '/live';
+    preview.src = previewScreen ? `${base}?preview=${previewScreen}&t=${Date.now()}` : `${base}?t=${Date.now()}`;
+  }
+
+  // --- élő állapot -----------------------------------------------------------
+
+  const socket = io({ query: { role: 'live' } });
+  socket.on('onlive:state', (state) => {
+    document.getElementById('statePill').textContent = 'állapot: ' + state.state;
+  });
+  socket.on('onlive:media', loadManifest);
+
+  loadManifest();
+})();
+</script>
+</body>
+</html>

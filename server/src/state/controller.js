@@ -15,11 +15,21 @@ import { EventEmitter } from 'node:events';
 import { Effects, Events, States, StreamStateMachine } from './machine.js';
 
 export class SessionController extends EventEmitter {
-  constructor({ config, store, logger }) {
+  /**
+   * @param {object} deps
+   * @param {() => number} [deps.outroDurationMs] az outro hossza — futásidőben
+   *   az admin felületen állítható (5. szegmens), ezért függvényként kapjuk,
+   *   nem fix értékként. Alapértelmezés: a konfigurációs érték.
+   * @param {{closePublisher: () => Promise<object>}} [deps.ingestControl]
+   *   az `ended` állapotban a publisher lekapcsolásához.
+   */
+  constructor({ config, store, logger, outroDurationMs, ingestControl }) {
     super();
     this.config = config;
     this.store = store;
     this.logger = logger;
+    this.outroDurationMs = outroDurationMs ?? (() => config.machine.outroDurationMs);
+    this.ingestControl = ingestControl ?? null;
 
     this.machine = new StreamStateMachine({
       liveThresholdMs: config.machine.liveThresholdMs,
@@ -80,7 +90,7 @@ export class SessionController extends EventEmitter {
       switch (effect.type) {
         case Effects.START_OUTRO_TIMER: {
           this.#clearOutroTimer();
-          const ms = this.config.machine.outroDurationMs;
+          const ms = this.outroDurationMs();
           this.logger.info(`Outro indul, ${Math.round(ms / 1000)} másodperc.`);
           this.outroTimer = setTimeout(() => {
             this.outroTimer = null;
@@ -111,10 +121,30 @@ export class SessionController extends EventEmitter {
     }
   }
 
+  /**
+   * `ended`: a SESSION zárul le, nem a folyamat.
+   *
+   * A publisher-kapcsolatot aktívan bontjuk, különben egy ottragadt telefon
+   * miatt a következő session azonnal `live`-ba ugorhatna egy régi stream
+   * alapján. A MediaMTX és a vezérlő szerver fut tovább, készen a következő
+   * adásra — a folyamat leállítása csak külön kérésre történik.
+   */
   #onEnded() {
     this.logger.ok('Az adás lezárult (ended).');
+
+    if (this.ingestControl) {
+      this.ingestControl
+        .closePublisher()
+        .then((result) => {
+          if (!result.closed && result.reason !== 'nincs aktív publisher') {
+            this.logger.warn(`A publisher lezárása nem sikerült: ${result.reason}`);
+          }
+        })
+        .catch((error) => this.logger.warn(`A publisher lezárása hibára futott: ${error.message}`));
+    }
+
     if (this.config.machine.shutdownOnEnded) {
-      this.logger.warn('ONLIVE_SHUTDOWN_ON_ENDED=true — a szerver leáll.');
+      this.logger.warn('ONLIVE_SHUTDOWN_ON_ENDED=true — a szerver folyamat is leáll.');
       setTimeout(() => process.exit(0), 500).unref?.();
     }
   }
@@ -214,10 +244,10 @@ export class SessionController extends EventEmitter {
       stats: this.stats,
       capture: this.capture,
       outro: {
-        durationMs: this.config.machine.outroDurationMs,
+        durationMs: this.outroDurationMs(),
         endsAt:
           machine.state === States.OUTRO && machine.context.lastTransitionAt
-            ? machine.context.lastTransitionAt + this.config.machine.outroDurationMs
+            ? machine.context.lastTransitionAt + this.outroDurationMs()
             : null,
       },
     };

@@ -120,6 +120,9 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
 - **Overlay-kompozíció leírása:** melyik widget (logó, chat, értesítés, alsó csík)
   látszik, hol, milyen tartalommal. A szerver ezt **állapotként** adja ki; a
   tényleges renderelés a `/live` oldalon, böngészőben történik.
+- **Médiatár:** az intro/outro/megszakadt kép vagy videó tárolása, tartalom-alapú
+  típus-validációval, és az outro hosszának kezelése
+  (**[`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md)**, 5. szegmens).
 - **Admin API:** start/stop, intro/outro indítás, widgetek kapcsolása,
   szövegek/értesítések küldése, beállítások mentése.
 - **WebSocket állapot-szinkron:** minden csatlakozott kliens (telefon, admin UI,
@@ -205,7 +208,8 @@ OnLIVE/
 │   ├── NETWORKING.md          # 1. szegmens — hálózat, tunnel, watchdog
 │   ├── ANDROID.md             # 2. szegmens — capture, publish, háttérfutás
 │   ├── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
-│   └── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
+│   ├── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
+│   └── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -220,9 +224,11 @@ OnLIVE/
 │   └── install-tunnel-watchdog.ps1# ütemezett feladat regisztrálása
 ├── server/                    # vezérlő szerver (4. szegmens)
 │   ├── src/state/             # ★ machine.js (tiszta), controller.js, store.js
-│   ├── src/ingest/monitor.js  # MediaMTX poll + debounce + megállás-figyelés
+│   ├── src/ingest/            # monitor.js (poll, debounce) + control.js (kick)
+│   ├── src/media/             # média-tár és tartalom-alapú validáció
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
+│   ├── src/web/               # /live kompozit oldal + média-admin oldal
 │   └── test/                  # az állapotgép és a controller tesztjei
 ├── web/                       # admin UI + /live oldal (későbbi szegmens)
 └── android/                   # OnLIVE Android app (2. szegmens)
@@ -247,7 +253,7 @@ A teljes, előre rögzített szegmens-lista:
 | 2 | Android alkalmazás: capture és publish | Android | ✅ kész |
 | 3 | Media ingest réteg beállítása | ingest | ✅ kész |
 | 4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
-| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ⬜ hátravan |
+| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
 | 6 | OBS integráció (Browser Source) | web | ⬜ hátravan |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ⬜ hátravan |
 | 8 | Web UI: admin/vezérlő felület | web | ⬜ hátravan |

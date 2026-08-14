@@ -16,15 +16,30 @@ import { logger } from './util/logger.js';
 import { Store } from './state/store.js';
 import { SessionController } from './state/controller.js';
 import { IngestMonitor } from './ingest/monitor.js';
+import { IngestControl } from './ingest/control.js';
+import { MediaStore } from './media/store.js';
 import { createRoutes } from './api/routes.js';
+import { createMediaRoutes } from './api/media.js';
 import { attachSocket } from './realtime/socket.js';
-import { livePlaceholderPage } from './placeholder.js';
+import { readFileSync } from 'node:fs';
 
 const startedAt = Date.now();
 
 const store = new Store(config.dataDir, logger);
-const controller = new SessionController({ config, store, logger });
+const mediaStore = new MediaStore({ dataDir: config.dataDir, logger });
 const monitor = new IngestMonitor({ config, logger });
+const ingestControl = new IngestControl({ config, logger });
+
+const controller = new SessionController({
+  config,
+  store,
+  logger,
+  // Az outro hossza futásidőben állítható az admin felületen (5. szegmens),
+  // ezért függvényként adjuk át — nem fix értékként.
+  outroDurationMs: () => mediaStore.outroDurationMs(),
+  // `ended` állapotban a publisher-kapcsolat aktív bontása.
+  ingestControl,
+});
 
 monitor.on('status', (status) => controller.updateIngest(status));
 
@@ -48,18 +63,22 @@ app.use((req, res, next) => {
 });
 
 app.use(createRoutes({ config, controller, monitor, store, logger, startedAt }));
+app.use(createMediaRoutes({ config, mediaStore, controller, logger }));
 
 /**
- * IDEIGLENES `/live` oldal.
+ * A `/live` kompozit oldal.
  *
- * Csak azt mutatja meg, melyik képernyőt kellene mutatni, és valós időben
- * követi az állapotot — így a 4. szegmens végponttól végpontig tesztelhető.
- * A tényleges overlay-kompozíció (intro/outro média, logó, chat, widgetek)
- * az 5–7. szegmens feladata, ez a fájl akkor lecserélődik.
+ * Az 5. szegmensben megkapta az intro/outro/megszakadt médiát és az
+ * előnézeti módot (`?preview=<screen>`). A tényleges videó-lejátszó (WHEP)
+ * a 6. szegmensben, a widgetek a 7.-ben kerülnek bele.
  */
-app.get('/live', (req, res) => {
-  res.type('html').send(livePlaceholderPage());
-});
+const page = (name) => readFileSync(new URL(`./web/${name}`, import.meta.url), 'utf8');
+
+app.get('/live', (req, res) => res.type('html').send(page('live.html')));
+
+/** Média-kezelő felület. A teljes admin UI a 8. szegmensben épül köré. */
+app.get('/admin', (req, res) => res.redirect('/admin/media'));
+app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 
 app.get('/', (req, res) => {
   res.type('html').send(
@@ -67,13 +86,14 @@ app.get('/', (req, res) => {
       `<body style="font-family:system-ui;background:#0B0D10;color:#e5e7eb;padding:2rem">` +
       `<h1>OnLIVE</h1><p>A vezérlő szerver fut.</p>` +
       `<ul><li><a style="color:#f43f5e" href="/live">/live</a> — kompozit lejátszó (ideiglenes)</li>` +
+      `<li><a style="color:#f43f5e" href="/admin/media">/admin/media</a> — intro/outro/megszakadt média</li>` +
       `<li><a style="color:#f43f5e" href="/healthz">/healthz</a> — állapot</li></ul>` +
-      `<p style="color:#6b7280">Az admin felület a 8. szegmensben készül el.</p></body>`,
+      `<p style="color:#6b7280">A teljes admin felület a 8. szegmensben készül el.</p></body>`,
   );
 });
 
 const httpServer = createServer(app);
-attachSocket(httpServer, { controller, logger });
+attachSocket(httpServer, { controller, mediaStore, logger });
 
 httpServer.listen(config.port, () => {
   banner();
@@ -93,6 +113,7 @@ function banner() {
   console.log(`${c.magenta}│${c.reset}  Helyi:   http://localhost:${config.port}`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Admin:   ${config.publicUrls.admin}`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Live:    ${config.publicUrls.live}/live`.padEnd(70) + `${c.magenta}│${c.reset}`);
+  console.log(`${c.magenta}│${c.reset}  Média:   ${config.publicUrls.admin}/admin/media`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Ingest:  ${config.publicUrls.ingest}/${config.ingest.path}/whip`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}└${line}┘${c.reset}\n`);
 

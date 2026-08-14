@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE</title>
+<style>
+  /*
+    A /live oldal OBS Browser Source-ként is fut, ezért:
+      - nincs görgetősáv és nincs interaktív elem,
+      - a háttér egyszínű (a 6. szegmens adja hozzá az átlátszó módot),
+      - minden réteg abszolút pozíciójú, egymásra rétegezve.
+  */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0B0D10; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e5e7eb;
+  }
+
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: none;
+    place-items: center;
+    text-align: center;
+  }
+  .layer.active { display: grid; }
+
+  /* A feltöltött média mindig a teljes képet kitölti. */
+  .media { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .media.cover { object-fit: cover; }
+  .media.contain { object-fit: contain; }
+
+  /* Ha nincs feltöltött média, ez a tartalék szöveg jelenik meg. */
+  .fallback { position: relative; z-index: 1; padding: 2rem; }
+  .label { font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 800; letter-spacing: -0.02em; }
+  .sub { margin-top: .75rem; color: #9ca3af; font-size: clamp(.9rem, 2.2vw, 1.2rem); }
+  .timer { margin-top: .5rem; color: #6b7280; font-variant-numeric: tabular-nums; }
+
+  .dot { display: inline-block; width: .55em; height: .55em; border-radius: 50%; margin-right: .4em; }
+  #screen-live .dot { background: #ef4444; animation: pulse 1.4s ease-in-out infinite; }
+  #screen-intro .dot { background: #f59e0b; }
+  #screen-interrupted .dot { background: #f59e0b; }
+  #screen-outro .dot { background: #6366f1; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+  /* Az élő videó helye. A tényleges WHEP lejátszás a 6. szegmensben kerül ide. */
+  #videoSlot {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    background: #05070a;
+  }
+
+  .preview-badge {
+    position: fixed; top: 10px; left: 10px; z-index: 10;
+    background: rgba(244, 63, 94, .9); color: #fff;
+    padding: .25rem .6rem; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  }
+  .offline-badge {
+    position: fixed; bottom: 10px; right: 10px; z-index: 10;
+    background: rgba(239, 68, 68, .9); color: #fff;
+    padding: .25rem .6rem; border-radius: 999px; font-size: .7rem;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+  <!-- blank: idle és ended -->
+  <div class="layer" id="screen-blank" data-screen="blank"></div>
+
+  <!-- intro -->
+  <div class="layer" id="screen-intro" data-screen="intro">
+    <div class="fallback">
+      <div class="label"><span class="dot"></span>Hamarosan kezdünk</div>
+      <div class="sub" id="introReason"></div>
+    </div>
+  </div>
+
+  <!-- live: ide kerül a 6. szegmensben a WHEP lejátszó -->
+  <div class="layer" id="screen-live" data-screen="live">
+    <div id="videoSlot">
+      <div class="fallback">
+        <div class="label"><span class="dot"></span>ÉLŐ</div>
+        <div class="timer" id="elapsed"></div>
+        <div class="sub">A videó-lejátszó a 6. szegmensben kerül ide.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- interrupted: reconnecting ÉS paused — szándékosan ugyanaz -->
+  <div class="layer" id="screen-interrupted" data-screen="interrupted">
+    <div class="fallback">
+      <div class="label"><span class="dot"></span>Megszakadt</div>
+      <div class="sub" id="interruptedSub">Mindjárt folytatjuk…</div>
+    </div>
+  </div>
+
+  <!-- outro -->
+  <div class="layer" id="screen-outro" data-screen="outro">
+    <div class="fallback">
+      <div class="label"><span class="dot"></span>Köszönjük, hogy velünk voltál!</div>
+      <div class="timer" id="outroTimer"></div>
+    </div>
+  </div>
+
+  <div class="offline-badge" id="offline">Nincs kapcsolat a vezérlő szerverrel</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+
+  /**
+   * Előnézeti mód: `?preview=intro|interrupted|outro|live|blank`.
+   * Ilyenkor az oldal figyelmen kívül hagyja a valós állapotot, és a kért
+   * képernyőt mutatja — pontosan úgy, ahogy élesben mutatná. Az admin
+   * felület ezt ágyazza be iframe-be.
+   */
+  const previewScreen = params.get('preview');
+  const isPreview = Boolean(previewScreen);
+
+  let state = null;
+  let media = { slots: {}, settings: {} };
+
+  // Slotonként egy elem, amit a manifest alapján hozunk létre/cserélünk.
+  const mediaElements = { intro: null, interrupted: null, outro: null };
+
+  const SCREEN_SLOT = { intro: 'intro', interrupted: 'interrupted', outro: 'outro' };
+
+  function layerFor(screen) {
+    return document.getElementById('screen-' + screen) || document.getElementById('screen-blank');
+  }
+
+  /** A manifest alapján felépíti (vagy lecseréli) egy slot médiaelemét. */
+  function syncMediaElement(slot) {
+    const entry = media.slots?.[slot] ?? null;
+    const layer = layerFor(slot);
+    const existing = mediaElements[slot];
+
+    if (!entry) {
+      if (existing) { existing.remove(); mediaElements[slot] = null; }
+      return;
+    }
+    if (existing && existing.dataset.url === entry.url) {
+      applyOptions(existing, entry);
+      return;
+    }
+    if (existing) existing.remove();
+
+    const el = entry.kind === 'video' ? document.createElement('video') : document.createElement('img');
+    el.className = 'media';
+    el.dataset.url = entry.url;
+    el.src = entry.url;
+
+    if (entry.kind === 'video') {
+      el.playsInline = true;
+      el.autoplay = false;      // a váltáskor indítjuk, hogy elölről menjen
+      el.preload = 'auto';
+      el.controls = false;
+    }
+    applyOptions(el, entry);
+
+    // A médiát a tartalék szöveg MÖGÉ tesszük: ha betöltődik, eltakarja,
+    // ha hiányzik vagy hibás, a szöveg látszik helyette.
+    layer.insertBefore(el, layer.firstChild);
+    mediaElements[slot] = el;
+  }
+
+  function applyOptions(el, entry) {
+    const options = entry.options ?? {};
+    el.classList.toggle('cover', options.fit !== 'contain');
+    el.classList.toggle('contain', options.fit === 'contain');
+    if (el.tagName === 'VIDEO') {
+      el.loop = options.loop !== false;
+      el.muted = options.muted !== false;
+    }
+  }
+
+  function syncAllMedia() {
+    for (const slot of Object.keys(SCREEN_SLOT)) syncMediaElement(slot);
+  }
+
+  function show(screen) {
+    for (const layer of document.querySelectorAll('.layer')) {
+      const active = layer.dataset.screen === screen;
+      layer.classList.toggle('active', active);
+
+      const video = layer.querySelector('video');
+      if (!video) continue;
+      if (active) {
+        // Mindig elölről: egy outro videó nem folytatódhat ott, ahol
+        // egy korábbi session abbahagyta.
+        try { video.currentTime = 0; } catch {}
+        video.play().catch(() => { /* automatikus lejátszás tiltva — a kép marad */ });
+      } else {
+        video.pause();
+      }
+    }
+  }
+
+  function render() {
+    if (!state) return;
+    const screen = isPreview ? previewScreen : state.screen;
+    show(screen);
+
+    const reasons = {
+      start: 'Az adás indul, várjuk a képet…',
+      interrupted: 'A kapcsolat megszakadt, újraindítjuk…',
+      resume: 'Folytatjuk, várjuk a képet…',
+    };
+    document.getElementById('introReason').textContent = reasons[state.introReason] ?? '';
+    document.getElementById('interruptedSub').textContent =
+      state.state === 'paused' ? 'Mindjárt folytatjuk…' : 'A kapcsolat helyreállítása folyamatban…';
+  }
+
+  function tick() {
+    if (!state) return;
+    const elapsed = document.getElementById('elapsed');
+    if (state.screen === 'live' && elapsed) {
+      const total = Math.floor((state.liveElapsedMs ?? 0) / 1000) +
+                    Math.floor((Date.now() - state.at) / 1000);
+      elapsed.textContent =
+        String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+    }
+    const outroTimer = document.getElementById('outroTimer');
+    if (state.screen === 'outro' && state.outro?.endsAt && outroTimer) {
+      outroTimer.textContent = Math.max(0, Math.ceil((state.outro.endsAt - Date.now()) / 1000)) + ' mp';
+    }
+  }
+
+  // --- indulás ---------------------------------------------------------------
+
+  fetch('/api/media')
+    .then((r) => r.json())
+    .then((manifest) => { media = manifest; syncAllMedia(); render(); })
+    .catch(() => {});
+
+  if (isPreview) {
+    document.body.insertAdjacentHTML(
+      'beforeend',
+      '<div class="preview-badge">Előnézet: ' + previewScreen + '</div>',
+    );
+    // Előnézetben nincs valós állapot, de a szövegek kitöltéséhez kell egy alap.
+    state = { screen: previewScreen, state: previewScreen, introReason: 'start', liveElapsedMs: 0, at: Date.now(), outro: {} };
+    render();
+  }
+
+  const socket = io({ query: { role: 'live' } });
+
+  socket.on('onlive:state', (next) => {
+    state = next;
+    document.getElementById('offline').style.display = 'none';
+    if (!isPreview) render();
+  });
+
+  socket.on('onlive:media', (manifest) => {
+    media = manifest;
+    syncAllMedia();
+    render();
+  });
+
+  socket.on('disconnect', () => {
+    document.getElementById('offline').style.display = 'block';
+  });
+
+  setInterval(tick, 250);
+})();
+</script>
+</body>
+</html>

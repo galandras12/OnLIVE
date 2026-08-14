@@ -33,6 +33,11 @@ export const SocketEvents = Object.freeze({
   /** Csak adminnak: telefon-telemetria és ingest-részletek. */
   STATS: 'onlive:stats',
   INGEST: 'onlive:ingest',
+  /**
+   * Médiaváltozás (5. szegmens): feltöltés, törlés, beállítás-módosítás.
+   * Enélkül egy már megnyitott OBS Browser Source a régi fájlt mutatná.
+   */
+  MEDIA: 'onlive:media',
 });
 
 const ENTER_EVENT = {
@@ -58,7 +63,7 @@ function publicView(snapshot) {
   };
 }
 
-export function attachSocket(httpServer, { controller, logger }) {
+export function attachSocket(httpServer, { controller, mediaStore, logger }) {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
     serveClient: true,
@@ -72,10 +77,15 @@ export function attachSocket(httpServer, { controller, logger }) {
 
     const snapshot = controller.snapshot();
     socket.emit(SocketEvents.STATE, role === 'admin' ? snapshot : publicView(snapshot));
+    if (mediaStore) socket.emit(SocketEvents.MEDIA, mediaStore.manifest());
 
     socket.on('disconnect', (reason) => {
       logger.info(`Socket lecsatlakozott: ${socket.id} (${reason})`);
     });
+  });
+
+  controller.on('media', (manifest) => {
+    io.emit(SocketEvents.MEDIA, manifest);
   });
 
   controller.on('change', (snapshot, result) => {

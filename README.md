@@ -20,6 +20,7 @@ szerveren és a web UI-n van.
 | [`infra/mediamtx/`](infra/mediamtx/) | MediaMTX konfiguráció, hookok, telepítő és ingest-próba |
 | [`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md) | **4. szegmens** — állapotgép, a 2 perces szabály, Socket.io események, API |
 | [`server/`](server/) | a vezérlő szerver forrása (Node.js + Express + Socket.io) |
+| [`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md) | **5. szegmens** — intro/outro/megszakadt média, validáció, előnézet |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -33,7 +34,7 @@ szerveren és a web UI-n van.
 ## Publikus végpontok
 
 ```
-Admin UI     : https://admin.galandras.com
+Admin UI     : https://admin.galandras.com          (média: /admin/media)
 Live / OBS   : https://live.galandras.com/live
 WHIP ingest  : https://ingest.galandras.com/<stream>/whip
 ```
@@ -75,7 +76,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 2 | Android alkalmazás: capture és publish | ✅ kész |
 | 3 | Media ingest réteg beállítása | ✅ kész |
 | 4 | Vezérlő szerver: állapotgép | ✅ kész |
-| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ⬜ hátravan |
+| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ✅ kész |
 | 6 | OBS integráció (Browser Source) | ⬜ hátravan |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ⬜ hátravan |
 | 8 | Web UI: admin/vezérlő felület | ⬜ hátravan |
@@ -88,11 +89,11 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **5.** Az intro/outro/megszakadt **média** kezelése és lejátszása — az
-  állapotgép már jelzi, melyik képernyő kell (`screen`, `introReason`), de a
-  tényleges videó/kép még hiányzik. A jelenlegi `/live` oldal ideiglenes.
-- **6. és 8.** A WHEP/HLS proxy, amin keresztül a `/live` oldal a MediaMTX
-  stream-jét játssza ([`docs/INGEST.md`](docs/INGEST.md) 4.1), és az admin felület.
+- **6.** A WHEP/HLS proxy és a tényleges videó-lejátszó a `live` képernyőn
+  ([`docs/INGEST.md`](docs/INGEST.md) 4.1), plusz az OBS-specifikus finomságok
+  (átlátszó háttér, méretezés).
+- **7. és 8.** Widgetek (logó, chat, értesítés) és a teljes admin felület —
+  a mostani `/admin/media` oldal ennek egy szelete.
 - **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
   szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az
