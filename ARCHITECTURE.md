@@ -117,9 +117,12 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   kizárólag ez az állapotgép dönti el.
 - **Adás-felügyelet:** a MediaMTX állapotának figyelése, a publisher elvesztésének
   detektálása → automatikus `INTERRUPTED` állapot, visszatéréskor `LIVE`.
-- **Overlay-kompozíció leírása:** melyik widget (logó, chat, értesítés, alsó csík)
-  látszik, hol, milyen tartalommal. A szerver ezt **állapotként** adja ki; a
-  tényleges renderelés a `/live` oldalon, böngészőben történik.
+- **Overlay-kompozíció leírása:** melyik widget (logó, beágyazás, szöveg,
+  értesítés) látszik, hol, milyen tartalommal. A szerver ezt **állapotként**
+  adja ki; a tényleges renderelés a `/live` oldalon, böngészőben történik.
+  A third-party beágyazások sandboxolt iframe-ben futnak, saját kulccsal —
+  soha nem látják a szülő oldal DOM-ját és a tokeneket
+  (**[`docs/WIDGETS.md`](docs/WIDGETS.md)**, 7. szegmens).
 - **Médiatár:** az intro/outro/megszakadt kép vagy videó tárolása, tartalom-alapú
   típus-validációval, és az outro hosszának kezelése
   (**[`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md)**, 5. szegmens).
@@ -216,7 +219,8 @@ OnLIVE/
 │   ├── INGEST.md              # 3. szegmens — MediaMTX, kimenetek, figyelés
 │   ├── STATE-MACHINE.md       # 4. szegmens — állapotgép, események, API
 │   ├── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
-│   └── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
+│   ├── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
+│   └── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -233,7 +237,7 @@ OnLIVE/
 │   ├── src/state/             # ★ machine.js (tiszta), controller.js, store.js
 │   ├── src/ingest/            # monitor.js (poll, debounce) + control.js (kick)
 │   ├── src/media/             # média-tár és tartalom-alapú validáció
-│   ├── src/overlay/           # overlay-elrendezés (widgetek a fix vásznon)
+│   ├── src/overlay/           # widgetek: pozíció, láthatóság, beágyazás-kulcsok
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
@@ -263,7 +267,7 @@ A teljes, előre rögzített szegmens-lista:
 | 4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
 | 6 | OBS integráció (Browser Source) | web | ✅ kész |
-| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ⬜ hátravan |
+| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | web | ⬜ hátravan |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ⬜ hátravan |
 | 10 | Biztonság és hitelesítés | szerver | ⬜ hátravan |

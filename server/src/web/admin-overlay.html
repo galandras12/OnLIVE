@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · Overlay</title>
+<style>
+  :root {
+    --bg:#0B0D10; --panel:#12161c; --panel2:#0f141a; --border:#1f2937;
+    --text:#e5e7eb; --muted:#9ca3af; --accent:#e11d48; --ok:#10b981;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.5;
+         display:flex; flex-direction:column; }
+
+  header { padding:.75rem 1.25rem; border-bottom:1px solid var(--border);
+           display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+  h1 { margin:0; font-size:1.05rem; } h1 span { color:var(--accent); }
+  nav { font-size:.85rem; } nav a { color:var(--muted); text-decoration:none; margin-left:.9rem; }
+  nav a:hover { color:var(--text); }
+  .spacer { margin-left:auto; }
+  .pill { font-size:.78rem; color:var(--muted); border:1px solid var(--border);
+          border-radius:999px; padding:.15rem .7rem; }
+  .saved { color:var(--ok); font-size:.78rem; min-width:7rem; }
+
+  main { flex:1; display:grid; grid-template-columns: 300px 1fr; min-height:0; }
+
+  aside { border-right:1px solid var(--border); overflow-y:auto; padding:1rem; }
+  aside h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em;
+             color:var(--muted); margin:1.25rem 0 .5rem; }
+  aside h2:first-child { margin-top:0; }
+
+  .btn { background:var(--accent); color:#fff; border:0; border-radius:8px;
+         padding:.4rem .75rem; font-size:.82rem; font-weight:600; cursor:pointer; }
+  .btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+  .btn.tiny { padding:.2rem .45rem; font-size:.75rem; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn-row { display:flex; gap:.4rem; flex-wrap:wrap; }
+
+  .layer { display:flex; align-items:center; gap:.5rem; padding:.4rem .5rem;
+           border:1px solid transparent; border-radius:8px; cursor:pointer; font-size:.85rem; }
+  .layer:hover { background:var(--panel); }
+  .layer.selected { border-color:var(--accent); background:var(--panel); }
+  .layer .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .layer .type { color:var(--muted); font-size:.72rem; }
+  .layer input[type=checkbox] { accent-color:var(--accent); }
+
+  .field { margin-bottom:.6rem; }
+  .field label { display:block; font-size:.75rem; color:var(--muted); margin-bottom:.2rem; }
+  .field input, .field select, .field textarea {
+    width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    border-radius:7px; padding:.35rem .5rem; font-size:.82rem; font-family:inherit;
+  }
+  .field textarea { font-family:ui-monospace,Menlo,monospace; font-size:.75rem; min-height:120px; resize:vertical; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+  .screens { display:flex; flex-wrap:wrap; gap:.3rem; }
+  .screens label { display:flex; align-items:center; gap:.2rem; font-size:.75rem;
+                   border:1px solid var(--border); border-radius:999px; padding:.1rem .5rem; cursor:pointer; }
+  .hint { font-size:.72rem; color:var(--muted); margin-top:.35rem; }
+  .warn { color:#f59e0b; }
+
+  /* --- vászon --- */
+  #canvasWrap { position:relative; overflow:hidden; background:
+      repeating-conic-gradient(#0e1319 0% 25%, #0a0e13 0% 50%) 50% / 32px 32px; }
+  #canvas { position:absolute; top:50%; left:50%; width:1920px; height:1080px;
+            transform-origin:center center; background:#05070a; box-shadow:0 0 0 1px var(--border); }
+  #liveFrame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; opacity:.6; }
+  #liveFrame.hidden { display:none; }
+
+  .box { position:absolute; border:1px solid rgba(148,163,184,.5); cursor:move;
+         display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .box.selected { border-color:var(--accent); box-shadow:0 0 0 2px rgba(225,29,72,.35); }
+  .box.hidden-widget { opacity:.28; border-style:dashed; }
+  .box.locked { cursor:not-allowed; }
+  .box img { width:100%; height:100%; object-fit:contain; pointer-events:none; }
+  .box .placeholder { color:var(--muted); font-size:28px; text-align:center; padding:8px; pointer-events:none; }
+  .box .txt { font-size:32px; font-weight:600; text-shadow:0 2px 12px rgba(0,0,0,.7); padding:8px 16px; width:100%; pointer-events:none; }
+  .box .label { position:absolute; top:0; left:0; background:rgba(225,29,72,.9); color:#fff;
+                font-size:20px; padding:2px 10px; pointer-events:none; }
+  .handle { position:absolute; width:22px; height:22px; background:var(--accent);
+            border:3px solid #fff; border-radius:50%; }
+  .handle.nw { left:-11px; top:-11px; cursor:nwse-resize; }
+  .handle.ne { right:-11px; top:-11px; cursor:nesw-resize; }
+  .handle.sw { left:-11px; bottom:-11px; cursor:nesw-resize; }
+  .handle.se { right:-11px; bottom:-11px; cursor:nwse-resize; }
+
+  .empty { color:var(--muted); font-size:.8rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>OnLIVE</span> — Overlay szerkesztő</h1>
+  <nav><a href="/admin/media">Média</a><a href="/admin/obs">OBS</a><a href="/live?bg=solid" target="_blank">Live</a></nav>
+  <div class="spacer"></div>
+  <label class="pill"><input type="checkbox" id="showLive" checked> élő háttér</label>
+  <span class="pill" id="statePill">állapot: …</span>
+  <span class="saved" id="savedNote"></span>
+</header>
+
+<main>
+  <aside>
+    <h2>Belépés</h2>
+    <div class="field">
+      <input type="password" id="password" placeholder="admin jelszó">
+      <div class="hint" id="authHint"></div>
+    </div>
+
+    <h2>Új widget</h2>
+    <div class="btn-row">
+      <button class="btn" data-add="logo">Logó</button>
+      <button class="btn" data-add="embed">Beágyazás</button>
+      <button class="btn" data-add="text">Szöveg</button>
+      <button class="btn" data-add="notification">Értesítés</button>
+    </div>
+
+    <h2>Rétegek</h2>
+    <div id="layers"></div>
+
+    <h2>Tulajdonságok</h2>
+    <div id="props"><div class="empty">Válassz egy widgetet a vásznon vagy a listából.</div></div>
+  </aside>
+
+  <div id="canvasWrap">
+    <div id="canvas">
+      <iframe id="liveFrame" src="/live?preview=live&bg=solid"></iframe>
+    </div>
+  </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const CANVAS = { width: 1920, height: 1080 };
+  const GRID = 10;
+
+  const password = {
+    get: () => localStorage.getItem('onlive.admin') ?? '',
+    set: (value) => localStorage.setItem('onlive.admin', value),
+  };
+  const headers = (extra = {}) => ({ 'X-OnLIVE-Admin-Password': password.get(), ...extra });
+  const json = (extra = {}) => headers({ 'Content-Type': 'application/json', ...extra });
+
+  let widgets = [];
+  let selectedId = null;
+  let scale = 1;
+
+  const canvas = document.getElementById('canvas');
+  const wrap = document.getElementById('canvasWrap');
+  const savedNote = document.getElementById('savedNote');
+
+  function note(text, kind) {
+    savedNote.textContent = text;
+    savedNote.style.color = kind === 'err' ? '#f87171' : 'var(--ok)';
+    if (text) setTimeout(() => { if (savedNote.textContent === text) savedNote.textContent = ''; }, 3000);
+  }
+
+  // =========================================================================
+  //  Vászon-skálázás
+  // =========================================================================
+
+  function fit() {
+    const pad = 32;
+    scale = Math.min(
+      (wrap.clientWidth - pad) / CANVAS.width,
+      (wrap.clientHeight - pad) / CANVAS.height,
+    );
+    canvas.style.transform = `translate(-50%, -50%) scale(${scale})`;
+  }
+  window.addEventListener('resize', fit);
+
+  // =========================================================================
+  //  Betöltés és mentés
+  // =========================================================================
+
+  async function load() {
+    const response = await fetch('/api/admin/overlay', { headers: headers() });
+    if (!response.ok) {
+      document.getElementById('authHint').innerHTML =
+        '<span class="warn">Érvénytelen vagy hiányzó jelszó.</span>';
+      return;
+    }
+    document.getElementById('authHint').textContent = 'Rendben.';
+    const manifest = await response.json();
+    widgets = manifest.widgets;
+    render();
+  }
+
+  /** Egy widget részleges mentése. A /live oldal azonnal követi. */
+  async function patch(id, body) {
+    const response = await fetch('/api/admin/overlay/' + id, {
+      method: 'PATCH', headers: json(), body: JSON.stringify(body),
+    });
+    if (!response.ok) return note('Mentés sikertelen', 'err');
+    const { widget } = await response.json();
+    const index = widgets.findIndex((w) => w.id === id);
+    if (index >= 0) widgets[index] = { ...widgets[index], ...widget };
+    note('Mentve');
+  }
+
+  /** Mozgatás/átméretezés közben nem mentünk minden pixelnél. */
+  let saveTimer = null;
+  function patchSoon(id, body) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => patch(id, body), 250);
+  }
+
+  // =========================================================================
+  //  Renderelés: vászon-dobozok + réteglista + tulajdonságok
+  // =========================================================================
+
+  function render() {
+    renderBoxes();
+    renderLayers();
+    renderProps();
+  }
+
+  function renderBoxes() {
+    for (const box of canvas.querySelectorAll('.box')) box.remove();
+
+    for (const widget of widgets) {
+      const box = document.createElement('div');
+      box.className = 'box' + (widget.id === selectedId ? ' selected' : '') +
+        (widget.visible ? '' : ' hidden-widget') + (widget.locked ? ' locked' : '');
+      box.dataset.id = widget.id;
+      box.style.left = widget.x + 'px';
+      box.style.top = widget.y + 'px';
+      box.style.width = widget.width + 'px';
+      box.style.height = widget.height + 'px';
+      box.style.opacity = widget.opacity;
+      box.style.zIndex = widget.zIndex;
+
+      if (widget.type === 'logo' && widget.data?.url) {
+        const img = document.createElement('img');
+        img.src = widget.data.url;
+        box.appendChild(img);
+      } else if (widget.type === 'embed') {
+        // A szerkesztőben csak jelzés — az élő beágyazás a /live oldalon fut,
+        // sandboxolt iframe-ben. Itt nem töltjük be a third-party kódot.
+        const label = document.createElement('div');
+        label.className = 'placeholder';
+        label.textContent = widget.data?.embedUrl ? '⧉ ' + widget.name : '⧉ ' + widget.name + ' (üres)';
+        box.appendChild(label);
+      } else if (widget.type === 'logo') {
+        const label = document.createElement('div');
+        label.className = 'placeholder';
+        label.textContent = '🖼 ' + widget.name + ' (nincs kép)';
+        box.appendChild(label);
+      } else {
+        const text = document.createElement('div');
+        text.className = 'txt';
+        text.textContent = widget.data?.text || widget.name;
+        if (widget.data?.color) text.style.color = widget.data.color;
+        if (widget.data?.fontSize) text.style.fontSize = widget.data.fontSize + 'px';
+        box.appendChild(text);
+      }
+
+      if (widget.id === selectedId && !widget.locked) {
+        for (const corner of ['nw', 'ne', 'sw', 'se']) {
+          const handle = document.createElement('div');
+          handle.className = 'handle ' + corner;
+          handle.dataset.corner = corner;
+          box.appendChild(handle);
+        }
+      }
+      canvas.appendChild(box);
+    }
+  }
+
+  function renderLayers() {
+    const container = document.getElementById('layers');
+    if (!widgets.length) {
+      container.innerHTML = '<div class="empty">Még nincs widget.</div>';
+      return;
+    }
+    container.innerHTML = '';
+
+    // Felül a legfelső réteg.
+    for (const widget of [...widgets].sort((a, b) => b.zIndex - a.zIndex)) {
+      const row = document.createElement('div');
+      row.className = 'layer' + (widget.id === selectedId ? ' selected' : '');
+
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.checked = widget.visible;
+      toggle.title = 'Láthatóság';
+      toggle.addEventListener('click', (event) => event.stopPropagation());
+      toggle.addEventListener('change', () => {
+        widget.visible = toggle.checked;
+        patch(widget.id, { visible: toggle.checked });
+        render();
+      });
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = widget.name;
+
+      const type = document.createElement('div');
+      type.className = 'type';
+      type.textContent = widget.type;
+
+      row.append(toggle, name, type);
+      row.addEventListener('click', () => { selectedId = widget.id; render(); });
+      container.appendChild(row);
+    }
+  }
+
+  function field(label, input) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'field';
+    const el = document.createElement('label');
+    el.textContent = label;
+    wrapper.append(el, input);
+    return wrapper;
+  }
+
+  function input(type, value, onChange, attrs = {}) {
+    const el = document.createElement(type === 'textarea' ? 'textarea' : 'input');
+    if (type !== 'textarea') el.type = type;
+    el.value = value ?? '';
+    Object.assign(el, attrs);
+    el.addEventListener('change', () => onChange(el.value));
+    return el;
+  }
+
+  function renderProps() {
+    const container = document.getElementById('props');
+    const widget = widgets.find((w) => w.id === selectedId);
+    if (!widget) {
+      container.innerHTML = '<div class="empty">Válassz egy widgetet a vásznon vagy a listából.</div>';
+      return;
+    }
+    container.innerHTML = '';
+
+    container.appendChild(field('Név', input('text', widget.name, (value) => {
+      widget.name = value; patch(widget.id, { name: value }); renderLayers();
+    })));
+
+    const position = document.createElement('div');
+    position.className = 'grid2';
+    for (const key of ['x', 'y', 'width', 'height']) {
+      position.appendChild(field(key.toUpperCase(), input('number', widget[key], (value) => {
+        widget[key] = Number(value); patch(widget.id, { [key]: Number(value) }); renderBoxes();
+      })));
+    }
+    container.appendChild(position);
+
+    const meta = document.createElement('div');
+    meta.className = 'grid2';
+    meta.appendChild(field('Átlátszóság', input('number', widget.opacity, (value) => {
+      widget.opacity = Number(value); patch(widget.id, { opacity: Number(value) }); renderBoxes();
+    }, { step: '0.05', min: '0', max: '1' })));
+    meta.appendChild(field('Réteg (z)', input('number', widget.zIndex, (value) => {
+      widget.zIndex = Number(value); patch(widget.id, { zIndex: Number(value) }); render();
+    }, { min: '0', max: '999' })));
+    container.appendChild(meta);
+
+    // --- típus-specifikus ---
+    if (widget.type === 'logo') {
+      const file = document.createElement('input');
+      file.type = 'file';
+      file.accept = '.jpg,.jpeg,.png,.webp';
+      file.addEventListener('change', async () => {
+        if (!file.files?.[0]) return;
+        const form = new FormData();
+        form.append('file', file.files[0]);
+        const response = await fetch('/api/admin/overlay/' + widget.id + '/image', {
+          method: 'POST', headers: headers(), body: form,
+        });
+        const body = await response.json();
+        if (!response.ok) return note(body.error ?? 'Sikertelen feltöltés', 'err');
+        note('Kép feltöltve');
+        await load();
+      });
+      container.appendChild(field('Kép (jpg / png / webp)', file));
+    } else if (widget.type === 'embed') {
+      const area = input('textarea', widget.data?.html ?? '', (value) => {
+        widget.data = { ...widget.data, html: value };
+        patch(widget.id, { data: { html: value } }).then(load);
+      });
+      area.placeholder = '<iframe src="https://…"></iframe>  vagy  <script src="…"><\/script>';
+      container.appendChild(field('Beágyazott kód', area));
+
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.innerHTML = 'A kód <strong>sandboxolt iframe-ben</strong> fut a /live oldalon: ' +
+        'nem éri el a szülő oldal DOM-ját, a sütiket és a lejátszási tokent.';
+      container.appendChild(hint);
+    } else {
+      container.appendChild(field('Szöveg', input('textarea', widget.data?.text ?? '', (value) => {
+        widget.data = { ...widget.data, text: value };
+        patch(widget.id, { data: { text: value } }); renderBoxes();
+      })));
+      const style = document.createElement('div');
+      style.className = 'grid2';
+      style.appendChild(field('Szín', input('color', widget.data?.color ?? '#ffffff', (value) => {
+        widget.data = { ...widget.data, color: value };
+        patch(widget.id, { data: { color: value } }); renderBoxes();
+      })));
+      style.appendChild(field('Méret (px)', input('number', widget.data?.fontSize ?? 32, (value) => {
+        widget.data = { ...widget.data, fontSize: Number(value) };
+        patch(widget.id, { data: { fontSize: Number(value) } }); renderBoxes();
+      }, { min: '8', max: '200' })));
+      container.appendChild(style);
+    }
+
+    // --- képernyő-szűrő ---
+    const screens = document.createElement('div');
+    screens.className = 'screens';
+    for (const screen of ['intro', 'live', 'interrupted', 'outro']) {
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = widget.screens.includes(screen);
+      box.addEventListener('change', () => {
+        const next = box.checked
+          ? [...widget.screens, screen]
+          : widget.screens.filter((item) => item !== screen);
+        widget.screens = next;
+        patch(widget.id, { screens: next });
+      });
+      label.append(box, document.createTextNode(screen));
+      screens.appendChild(label);
+    }
+    container.appendChild(field('Mely képernyőkön (üres = mindegyiken)', screens));
+
+    const actions = document.createElement('div');
+    actions.className = 'btn-row';
+
+    const lock = document.createElement('button');
+    lock.className = 'btn ghost tiny';
+    lock.textContent = widget.locked ? 'Feloldás' : 'Rögzítés';
+    lock.addEventListener('click', () => {
+      widget.locked = !widget.locked; patch(widget.id, { locked: widget.locked }); render();
+    });
+
+    const remove = document.createElement('button');
+    remove.className = 'btn tiny';
+    remove.textContent = 'Törlés';
+    remove.addEventListener('click', async () => {
+      if (!confirm(`Törlöd ezt: ${widget.name}?`)) return;
+      const response = await fetch('/api/admin/overlay/' + widget.id, { method: 'DELETE', headers: headers() });
+      if (!response.ok) return note('Törlés sikertelen', 'err');
+      selectedId = null;
+      await load();
+      note('Törölve');
+    });
+
+    actions.append(lock, remove);
+    container.appendChild(actions);
+  }
+
+  // =========================================================================
+  //  Mozgatás és átméretezés (Canva-szerű)
+  // =========================================================================
+
+  let drag = null;
+
+  canvas.addEventListener('pointerdown', (event) => {
+    const handle = event.target.closest('.handle');
+    const box = event.target.closest('.box');
+    if (!box) { selectedId = null; render(); return; }
+
+    const widget = widgets.find((w) => w.id === box.dataset.id);
+    if (!widget) return;
+
+    if (selectedId !== widget.id) { selectedId = widget.id; render(); }
+    if (widget.locked) return;
+
+    drag = {
+      widget,
+      corner: handle?.dataset.corner ?? null,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: { x: widget.x, y: widget.y, width: widget.width, height: widget.height },
+    };
+    canvas.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+
+  window.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+
+    // A vászon skálázva van, ezért az egérelmozdulást vissza kell osztani.
+    const dx = (event.clientX - drag.startX) / scale;
+    const dy = (event.clientY - drag.startY) / scale;
+    const snap = (value) => (event.shiftKey ? value : Math.round(value / GRID) * GRID);
+    const { widget, origin, corner } = drag;
+
+    if (!corner) {
+      widget.x = snap(origin.x + dx);
+      widget.y = snap(origin.y + dy);
+    } else {
+      const keepRatio = event.altKey;
+      let width = origin.width + (corner.includes('e') ? dx : -dx);
+      let height = origin.height + (corner.includes('s') ? dy : -dy);
+      width = Math.max(24, snap(width));
+      height = Math.max(24, snap(height));
+      if (keepRatio) height = Math.round(width * (origin.height / origin.width));
+
+      widget.width = width;
+      widget.height = height;
+      if (corner.includes('w')) widget.x = snap(origin.x + (origin.width - width));
+      if (corner.includes('n')) widget.y = snap(origin.y + (origin.height - height));
+    }
+
+    renderBoxes();
+    patchSoon(widget.id, { x: widget.x, y: widget.y, width: widget.width, height: widget.height });
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (!drag) return;
+    const { widget } = drag;
+    drag = null;
+    patch(widget.id, { x: widget.x, y: widget.y, width: widget.width, height: widget.height });
+  });
+
+  /** Nyilakkal finomhangolás: 1 px, Shift-tel 10 px. */
+  window.addEventListener('keydown', (event) => {
+    if (!selectedId || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+    const widget = widgets.find((w) => w.id === selectedId);
+    if (!widget || widget.locked) return;
+
+    const step = event.shiftKey ? 10 : 1;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (!moves[event.key]) return;
+
+    widget.x += moves[event.key][0];
+    widget.y += moves[event.key][1];
+    renderBoxes();
+    patchSoon(widget.id, { x: widget.x, y: widget.y });
+    event.preventDefault();
+  });
+
+  // =========================================================================
+  //  Új widget
+  // =========================================================================
+
+  for (const button of document.querySelectorAll('[data-add]')) {
+    button.addEventListener('click', async () => {
+      const type = button.dataset.add;
+      const body = {
+        type,
+        x: 120, y: 120,
+        data: type === 'text' || type === 'notification' ? { text: 'Új szöveg', color: '#ffffff', fontSize: 32 } : {},
+      };
+      const response = await fetch('/api/admin/overlay', { method: 'POST', headers: json(), body: JSON.stringify(body) });
+      if (!response.ok) return note('Létrehozás sikertelen', 'err');
+      const { widget } = await response.json();
+      selectedId = widget.id;
+      await load();
+      note('Létrehozva');
+    });
+  }
+
+  // =========================================================================
+  //  Élő háttér és állapot
+  // =========================================================================
+
+  document.getElementById('showLive').addEventListener('change', (event) => {
+    document.getElementById('liveFrame').classList.toggle('hidden', !event.target.checked);
+  });
+
+  document.getElementById('password').value = password.get();
+  document.getElementById('password').addEventListener('change', (event) => {
+    password.set(event.target.value);
+    load();
+  });
+
+  const socket = io({ query: { role: 'live' } });
+  socket.on('onlive:state', (state) => {
+    document.getElementById('statePill').textContent = 'állapot: ' + state.state;
+  });
+
+  fit();
+  load();
+})();
+</script>
+</body>
+</html>

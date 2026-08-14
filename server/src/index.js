@@ -110,6 +110,7 @@ app.get('/live', liveAuth, (req, res) => {
 app.get('/admin', (req, res) => res.redirect('/admin/media'));
 app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
+app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
 
 app.get('/', (req, res) => {
   res.type('html').send(
@@ -119,6 +120,7 @@ app.get('/', (req, res) => {
       `<ul><li><a style="color:#f43f5e" href="/live">/live</a> — kompozit lejátszó (ideiglenes)</li>` +
       `<li><a style="color:#f43f5e" href="/admin/media">/admin/media</a> — intro/outro/megszakadt média</li>` +
       `<li><a style="color:#f43f5e" href="/admin/obs">/admin/obs</a> — OBS Browser Source beállítás</li>` +
+      `<li><a style="color:#f43f5e" href="/admin/overlay">/admin/overlay</a> — widget szerkesztő</li>` +
       `<li><a style="color:#f43f5e" href="/healthz">/healthz</a> — állapot</li></ul>` +
       `<p style="color:#6b7280">A teljes admin felület a 8. szegmensben készül el.</p></body>`,
   );
@@ -147,6 +149,7 @@ function banner() {
   console.log(`${c.magenta}│${c.reset}  Live:    ${config.publicUrls.live}/live`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Média:   ${config.publicUrls.admin}/admin/media`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  OBS:     ${config.publicUrls.admin}/admin/obs`.padEnd(70) + `${c.magenta}│${c.reset}`);
+  console.log(`${c.magenta}│${c.reset}  Overlay: ${config.publicUrls.admin}/admin/overlay`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}│${c.reset}  Ingest:  ${config.publicUrls.ingest}/${config.ingest.path}/whip`.padEnd(70) + `${c.magenta}│${c.reset}`);
   console.log(`${c.magenta}└${line}┘${c.reset}\n`);
 

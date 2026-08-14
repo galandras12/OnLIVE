@@ -22,6 +22,7 @@ szerveren és a web UI-n van.
 | [`server/`](server/) | a vezérlő szerver forrása (Node.js + Express + Socket.io) |
 | [`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md) | **5. szegmens** — intro/outro/megszakadt média, validáció, előnézet |
 | [`docs/OBS.md`](docs/OBS.md) | **6. szegmens** — Browser Source beállítás, átlátszó vászon, WHEP/HLS lejátszás |
+| [`docs/WIDGETS.md`](docs/WIDGETS.md) | **7. szegmens** — widgetek, drag-and-drop szerkesztő, sandboxolt beágyazások |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -35,7 +36,7 @@ szerveren és a web UI-n van.
 ## Publikus végpontok
 
 ```
-Admin UI     : https://admin.galandras.com          (/admin/media, /admin/obs)
+Admin UI     : https://admin.galandras.com          (/admin/media, /admin/obs, /admin/overlay)
 Live / OBS   : https://live.galandras.com/live      (Browser Source, 1920x1080)
 WHIP ingest  : https://ingest.galandras.com/<stream>/whip
 ```
@@ -79,7 +80,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 4 | Vezérlő szerver: állapotgép | ✅ kész |
 | 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ✅ kész |
 | 6 | OBS integráció (Browser Source) | ✅ kész |
-| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ⬜ hátravan |
+| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | ⬜ hátravan |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | ⬜ hátravan |
 | 10 | Biztonság és hitelesítés | ⬜ hátravan |
@@ -90,11 +91,11 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **7.** A widget-szerkesztő: drag-and-drop admin felület, chat-források,
-  értesítés-küldés. A `/live` oldal a renderelést már tudja, és az
-  `onlive:overlay` esemény is megvan — a szerkesztő hiányzik hozzá.
-- **8.** A teljes admin felület — a mostani `/admin/media` és `/admin/obs`
-  oldal ennek egy-egy szelete.
+- **8.** A teljes admin felület: állapotvezérlés (Kezdés/Szünet/Befejezés),
+  minőségi metrikák, előnézet egy helyen — a mostani `/admin/media`,
+  `/admin/obs` és `/admin/overlay` oldal ennek egy-egy szelete.
+- **9.** Stream-monitor, letölthető napló (az átmenet-napló már készül hozzá),
+  link-gyűjtő.
 - **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
   szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az

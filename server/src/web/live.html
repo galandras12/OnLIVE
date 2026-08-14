@@ -69,6 +69,8 @@
   #widgets { position: absolute; inset: 0; pointer-events: none; }
   .widget { position: absolute; display: flex; align-items: center; justify-content: center; }
   .widget img { width: 100%; height: 100%; object-fit: contain; }
+  /* A beágyazott third-party tartalom sandboxolt iframe-ben fut. */
+  .widget iframe { width: 100%; height: 100%; border: 0; background: transparent; }
   .widget .text {
     font-size: 32px; font-weight: 600; line-height: 1.25;
     text-shadow: 0 2px 12px rgba(0,0,0,.7);
@@ -251,36 +253,98 @@
 
   const widgetLayer = document.getElementById('widgets');
 
+  /**
+   * A widgetek renderelése INKREMENTÁLISAN.
+   *
+   * Miért nem egyszerű újrarajzolás: egy beágyazott chat iframe minden
+   * újralétrehozáskor újratöltene — állapotváltáskor elveszne az addigi
+   * beszélgetés, és a third-party szkript újra elindulna. Ezért az elemeket
+   * megtartjuk, és csak a pozíciót/láthatóságot frissítjük; iframe-et
+   * kizárólag akkor cserélünk, ha tényleg megváltozott a forrás.
+   */
+  const widgetElements = new Map();
+
   function renderWidgets() {
     const screen = isPreview ? previewScreen : state?.screen;
-    widgetLayer.innerHTML = '';
+    const seen = new Set();
 
     for (const widget of overlay.widgets ?? []) {
-      if (!widget.visible) continue;
-      if (widget.screens?.length && !widget.screens.includes(screen)) continue;
+      const shouldShow =
+        widget.visible && (!widget.screens?.length || widget.screens.includes(screen));
 
-      const el = document.createElement('div');
-      el.className = 'widget ' + widget.type;
+      let entry = widgetElements.get(widget.id);
+      const signature = widget.type + '|' + (widget.data?.embedUrl ?? widget.data?.url ?? '') +
+        '|' + (widget.data?.text ?? '') + '|' + (widget.data?.color ?? '') + '|' + (widget.data?.fontSize ?? '');
+
+      if (entry && entry.signature !== signature) {
+        entry.element.remove();
+        entry = null;
+      }
+      if (!entry) {
+        const element = buildWidget(widget);
+        if (!element) continue;
+        widgetLayer.appendChild(element);
+        entry = { element, signature };
+        widgetElements.set(widget.id, entry);
+      }
+
+      const el = entry.element;
       el.style.left = widget.x + 'px';
       el.style.top = widget.y + 'px';
       el.style.width = widget.width + 'px';
       el.style.height = widget.height + 'px';
       el.style.opacity = widget.opacity ?? 1;
-
-      if (widget.type === 'logo' && widget.data?.url) {
-        const img = document.createElement('img');
-        img.src = withToken(widget.data.url);
-        el.appendChild(img);
-      } else if (widget.data?.text) {
-        const text = document.createElement('div');
-        text.className = 'text';
-        text.textContent = widget.data.text;
-        if (widget.data.color) text.style.color = widget.data.color;
-        if (widget.data.fontSize) text.style.fontSize = widget.data.fontSize + 'px';
-        el.appendChild(text);
-      }
-      widgetLayer.appendChild(el);
+      el.style.zIndex = widget.zIndex ?? 1;
+      el.style.display = shouldShow ? 'flex' : 'none';
+      seen.add(widget.id);
     }
+
+    // A törölt widgetek elemei is menjenek.
+    for (const [id, entry] of widgetElements) {
+      if (!seen.has(id)) {
+        entry.element.remove();
+        widgetElements.delete(id);
+      }
+    }
+  }
+
+  function buildWidget(widget) {
+    const el = document.createElement('div');
+    el.className = 'widget ' + widget.type;
+
+    if (widget.type === 'logo') {
+      if (!widget.data?.url) return null;
+      const img = document.createElement('img');
+      img.src = withToken(widget.data.url);
+      img.alt = '';
+      el.appendChild(img);
+    } else if (widget.type === 'embed') {
+      if (!widget.data?.embedUrl) return null;
+      const frame = document.createElement('iframe');
+      /*
+        BIZTONSÁG: `allow-scripts` van, `allow-same-origin` NINCS.
+        Így az iframe átlátszatlan (opaque) origint kap: nem éri el a szülő
+        DOM-ját, a localStorage-ot és a sütiket. A kettő EGYÜTT kioltaná a
+        sandboxot, ezért soha nem adjuk meg egyszerre.
+      */
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.setAttribute('loading', 'eager');
+      frame.setAttribute('scrolling', 'no');
+      // A beágyazás URL-je a widget saját kulcsát viszi, NEM a lejátszási
+      // tokent — így a third-party szkript nem tudja azt kiolvasni.
+      frame.src = widget.data.embedUrl;
+      el.appendChild(frame);
+    } else {
+      const text = document.createElement('div');
+      text.className = 'text';
+      text.textContent = widget.data?.text ?? '';
+      if (widget.data?.color) text.style.color = widget.data.color;
+      if (widget.data?.fontSize) text.style.fontSize = widget.data.fontSize + 'px';
+      if (widget.data?.align) text.style.textAlign = widget.data.align;
+      el.appendChild(text);
+    }
+    return el;
   }
 
   // =========================================================================
