@@ -10,13 +10,12 @@
 
 import { Router } from 'express';
 import { buildPeriods, summarize, toChartSeries, toCsv } from '../log/report.js';
-import { adminAuth } from './auth.js';
 
-export function createMonitorRoutes({ config, store, metrics, links, logger }) {
+export function createMonitorRoutes({ config, store, metrics, links, logger, adminGuard }) {
   const router = Router();
 
   const admin = Router();
-  admin.use(adminAuth(config, logger));
+  admin.use(adminGuard);
 
   /** A szűrők értelmezése: `from`/`to` ISO dátum vagy ezredmásodperc. */
   function parseRange(query) {

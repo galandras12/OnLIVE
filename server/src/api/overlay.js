@@ -18,12 +18,11 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 
 import { validateMedia, MediaKind } from '../media/validate.js';
-import { adminAuth } from './auth.js';
 
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 const MAX_EMBED_CHARS = 64 * 1024;
 
-export function createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth }) {
+export function createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth, adminGuard }) {
   const router = Router();
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IMAGE_BYTES, files: 1 } });
 
@@ -93,7 +92,7 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
   // =========================================================================
 
   const admin = Router();
-  admin.use(adminAuth(config, logger));
+  admin.use(adminGuard);
 
   admin.get('/', (req, res) => res.json(overlayStore.adminManifest()));
 

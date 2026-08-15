@@ -102,12 +102,6 @@
 
 <main>
   <aside>
-    <h2>Belépés</h2>
-    <div class="field">
-      <input type="password" id="password" placeholder="admin jelszó">
-      <div class="hint" id="authHint"></div>
-    </div>
-
     <h2>Új widget</h2>
     <div class="btn-row">
       <button class="btn" data-add="logo">Logó</button>
@@ -130,18 +124,14 @@
   </div>
 </main>
 
+<script src="/admin-auth.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (() => {
   const CANVAS = { width: 1920, height: 1080 };
   const GRID = 10;
 
-  const password = {
-    get: () => localStorage.getItem('onlive.admin') ?? '',
-    set: (value) => localStorage.setItem('onlive.admin', value),
-  };
-  const headers = (extra = {}) => ({ 'X-OnLIVE-Admin-Password': password.get(), ...extra });
-  const json = (extra = {}) => headers({ 'Content-Type': 'application/json', ...extra });
+  const { api, requireAuth } = window.OnLiveAdmin;
 
   let widgets = [];
   let selectedId = null;
@@ -176,10 +166,10 @@
   // =========================================================================
 
   async function load() {
-    const response = await fetch('/api/admin/overlay', { headers: headers() });
+    const response = await api('/api/admin/overlay', {});
     if (!response.ok) {
       document.getElementById('authHint').innerHTML =
-        '<span class="warn">Érvénytelen vagy hiányzó jelszó.</span>';
+        '<span class="warn">Az elrendezés betöltése nem sikerült.</span>';
       return;
     }
     document.getElementById('authHint').textContent = 'Rendben.';
@@ -190,8 +180,8 @@
 
   /** Egy widget részleges mentése. A /live oldal azonnal követi. */
   async function patch(id, body) {
-    const response = await fetch('/api/admin/overlay/' + id, {
-      method: 'PATCH', headers: json(), body: JSON.stringify(body),
+    const response = await api('/api/admin/overlay/' + id, {
+      method: 'PATCH',  body: JSON.stringify(body),
     });
     if (!response.ok) return note('Mentés sikertelen', 'err');
     const { widget } = await response.json();
@@ -366,8 +356,8 @@
         if (!file.files?.[0]) return;
         const form = new FormData();
         form.append('file', file.files[0]);
-        const response = await fetch('/api/admin/overlay/' + widget.id + '/image', {
-          method: 'POST', headers: headers(), body: form,
+        const response = await api('/api/admin/overlay/' + widget.id + '/image', {
+          method: 'POST',  body: form,
         });
         const body = await response.json();
         if (!response.ok) return note(body.error ?? 'Sikertelen feltöltés', 'err');
@@ -441,7 +431,7 @@
     remove.textContent = 'Törlés';
     remove.addEventListener('click', async () => {
       if (!confirm(`Törlöd ezt: ${widget.name}?`)) return;
-      const response = await fetch('/api/admin/overlay/' + widget.id, { method: 'DELETE', headers: headers() });
+      const response = await api('/api/admin/overlay/' + widget.id, { method: 'DELETE', headers: headers() });
       if (!response.ok) return note('Törlés sikertelen', 'err');
       selectedId = null;
       await load();
@@ -546,7 +536,7 @@
         x: 120, y: 120,
         data: type === 'text' || type === 'notification' ? { text: 'Új szöveg', color: '#ffffff', fontSize: 32 } : {},
       };
-      const response = await fetch('/api/admin/overlay', { method: 'POST', headers: json(), body: JSON.stringify(body) });
+      const response = await api('/api/admin/overlay', { method: 'POST',  body: JSON.stringify(body) });
       if (!response.ok) return note('Létrehozás sikertelen', 'err');
       const { widget } = await response.json();
       selectedId = widget.id;
@@ -563,11 +553,6 @@
     document.getElementById('liveFrame').classList.toggle('hidden', !event.target.checked);
   });
 
-  document.getElementById('password').value = password.get();
-  document.getElementById('password').addEventListener('change', (event) => {
-    password.set(event.target.value);
-    load();
-  });
 
   const socket = io({ query: { role: 'live' } });
   socket.on('onlive:state', (state) => {
@@ -575,7 +560,7 @@
   });
 
   fit();
-  load();
+  requireAuth().then(load);
 })();
 </script>
 </body>

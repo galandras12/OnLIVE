@@ -28,7 +28,11 @@ import { createOverlayRoutes } from './api/overlay.js';
 import { createStreamProxyRoutes } from './api/stream-proxy.js';
 import { createDeviceRoutes } from './api/device.js';
 import { createMonitorRoutes } from './api/monitor.js';
-import { liveAuth as liveAuthFactory } from './api/auth.js';
+import { adminAuth, liveAuth as liveAuthFactory } from './api/auth.js';
+import { createAuthRoutes } from './api/auth-routes.js';
+import { SessionStore } from './security/sessions.js';
+import { RateLimiter } from './security/rate-limit.js';
+import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
 import { readFileSync } from 'node:fs';
 
@@ -42,6 +46,11 @@ const commands = new DeviceCommandQueue({ logger });
 /** Metrika-napló és chat-linkek (9. szegmens). */
 const metrics = new MetricsRecorder({ dataDir: config.dataDir, logger });
 const links = new LinkStore({ dataDir: config.dataDir, logger });
+
+/** Admin munkamenetek és a bejelentkezés sebességkorlátozása (10. szegmens). */
+const sessions = new SessionStore({ ttlMs: config.sessionTtlMs });
+const loginLimiter = new RateLimiter();
+setInterval(() => loginLimiter.prune(), 60_000).unref?.();
 const monitor = new IngestMonitor({ config, logger });
 const ingestControl = new IngestControl({ config, logger });
 
@@ -82,13 +91,44 @@ app.use((req, res, next) => {
  * A `/live` oldal és a lejátszás védelme. Token nélkül nyilvános — így az
  * OBS-be elég a puszta URL; tokennel viszont minden lejátszási kérés kéri.
  */
-const liveAuth = liveAuthFactory(config);
+const liveAuth = liveAuthFactory(config, { sessions });
 
-app.use(createRoutes({ config, controller, monitor, store, commands, logger, startedAt }));
-app.use(createDeviceRoutes({ config, controller, commands, logger }));
-app.use(createMonitorRoutes({ config, store, metrics, links, logger }));
-app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth }));
-app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth }));
+/**
+ * EGYETLEN admin-őr minden modulnak. Így garantált, hogy mindenhol ugyanaz a
+ * munkamenet-, CSRF- és sebességkorlát-ellenőrzés fut — nem fordulhat elő,
+ * hogy egy útvonal véletlenül lazább szabállyal védett.
+ */
+const adminGuard = adminAuth(config, logger, { sessions, limiter: loginLimiter });
+
+/**
+ * Biztonsági fejlécek minden válaszon.
+ *
+ * A CSP `unsafe-inline`-t enged a szkriptekre, mert az admin oldalak
+ * szándékosan build-lépés nélküliek (egy fájl = egy oldal). A külső forrásból
+ * betöltött szkriptet viszont így is blokkolja, és a `frame-ancestors` miatt
+ * idegen oldal nem ágyazhatja be a felületet.
+ */
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  if (!req.path.startsWith('/embed/')) {
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; " +
+        "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+        "connect-src 'self' ws: wss:; frame-src 'self'; frame-ancestors 'self'",
+    );
+  }
+  next();
+});
+
+app.use(createAuthRoutes({ config, sessions, limiter: loginLimiter, adminGuard, logger }));
+app.use(createRoutes({ config, controller, monitor, store, commands, limiter: loginLimiter, adminGuard, logger, startedAt }));
+app.use(createDeviceRoutes({ config, controller, commands, adminGuard, logger }));
+app.use(createMonitorRoutes({ config, store, metrics, links, adminGuard, logger }));
+app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth, adminGuard }));
+app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth, adminGuard }));
 app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
 
 /** A HLS tartalék lejátszó könyvtára (csak akkor tölt be, ha kell). */
@@ -126,7 +166,9 @@ app.get('/live', liveAuth, (req, res) => {
  * önállóan is megnyithatók, és fülként be vannak ágyazva ide.
  */
 app.get('/admin.css', (req, res) => res.type('text/css').send(page('admin.css')));
+app.get('/admin-auth.js', (req, res) => res.type('application/javascript').send(page('admin-auth.js')));
 app.get('/admin', (req, res) => res.type('html').send(page('admin.html')));
+app.get('/admin/login', (req, res) => res.type('html').send(page('login.html')));
 app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
 app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
@@ -160,7 +202,7 @@ app.get('/', (req, res) => {
 });
 
 const httpServer = createServer(app);
-attachSocket(httpServer, { controller, mediaStore, overlayStore, config, logger });
+attachSocket(httpServer, { controller, mediaStore, overlayStore, config, sessions, logger });
 
 httpServer.listen(config.port, () => {
   banner();
@@ -189,13 +231,39 @@ function banner() {
       `outro ${config.machine.outroDurationMs / 1000} mp · ` +
       `megszakadás ${config.ingest.interruptAfterMs} ms`,
   );
-  if (!config.streamKey) logger.warn('Nincs ONLIVE_STREAM_KEY — a session API védtelen.');
-  if (!config.adminPassword) logger.warn('Nincs ONLIVE_ADMIN_PASSWORD — az admin API csak localhostról érhető el.');
+  securityReport();
+}
+
+/**
+ * Biztonsági helyzetkép induláskor.
+ *
+ * A streamkulcs a WHIP ingest EGYETLEN védelme: aki kitalálja, idegen streamet
+ * publikálhat a nevünkben. Ezért a gyenge vagy hiányzó titkokat indításkor
+ * kiírjuk — ne akkor derüljön ki, amikor már baj van.
+ */
+function securityReport() {
+  const checks = [
+    ['Admin jelszó', config.adminPasswordHash
+      ? { level: 'strong', message: 'Admin jelszó: hash-elve tárolva.' }
+      : assessSecret(config.adminPassword, { name: 'Admin jelszó', minLength: 12 })],
+    ['Streamkulcs', assessSecret(config.streamKey, { name: 'Streamkulcs', minLength: 20 })],
+    ['Hook titok', assessSecret(config.hookSecret, { name: 'Hook titok', minLength: 16 })],
+  ];
+
+  for (const [, assessment] of checks) {
+    if (assessment.level === 'strong') continue;
+    if (assessment.level === 'missing') logger.error(assessment.message);
+    else logger.warn(assessment.message);
+  }
+
   logger.info(
     config.liveToken
-      ? 'A /live oldal tokennel védett (ONLIVE_LIVE_TOKEN).'
-      : 'A /live oldal nyilvános. Tokenes védelemhez állítsd be az ONLIVE_LIVE_TOKEN-t.',
+      ? 'A /live tokennel védett (csak megtekintés, vezérlésre nem jó).'
+      : 'A /live nyilvános. Tokenes védelemhez: ONLIVE_LIVE_TOKEN (npm run keygen).',
   );
+  if (!config.adminPassword && !config.adminPasswordHash) {
+    logger.error('Nincs admin jelszó — az admin felület CSAK localhostról érhető el.');
+  }
 }
 
 // -------------------------------------------------------------------------

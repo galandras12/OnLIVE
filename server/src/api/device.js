@@ -14,7 +14,6 @@
 import { Router } from 'express';
 import { DeviceCommands } from '../device/commands.js';
 import { Events } from '../state/machine.js';
-import { adminAuth } from './auth.js';
 
 /** Az admin gomb → állapotgép-esemény + telefon-parancs párosítás. */
 const SESSION_ACTIONS = {
@@ -24,10 +23,10 @@ const SESSION_ACTIONS = {
   stop: { event: Events.SESSION_END, command: DeviceCommands.STOP },
 };
 
-export function createDeviceRoutes({ config, controller, commands, logger }) {
+export function createDeviceRoutes({ config, controller, commands, logger, adminGuard }) {
   const router = Router();
   const admin = Router();
-  admin.use(adminAuth(config, logger));
+  admin.use(adminGuard);
 
   admin.get('/', (req, res) => res.json(commands.status()));
 

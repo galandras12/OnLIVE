@@ -25,6 +25,7 @@ szerveren és a web UI-n van.
 | [`docs/WIDGETS.md`](docs/WIDGETS.md) | **7. szegmens** — widgetek, drag-and-drop szerkesztő, sandboxolt beágyazások |
 | [`docs/ADMIN-UI.md`](docs/ADMIN-UI.md) | **8. szegmens** — admin felület, design tokenek, web→telefon parancscsatorna |
 | [`docs/MONITORING.md`](docs/MONITORING.md) | **9. szegmens** — stream-monitor, letölthető CSV napló, chat-link gyűjtő |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | **10. szegmens** — jogosultsági szintek, bejelentkezés, streamkulcs, CSRF |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -64,6 +65,8 @@ powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<str
 # 3) vezérlő szerver
 cd ..\..\server
 npm install
+npm run keygen                              # streamkulcs, live token, hook titok
+npm run hash-password -- "hosszú jelszó"    # admin jelszó hash
 npm test
 npm start
 ```
@@ -86,7 +89,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | ✅ kész |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | ✅ kész |
-| 10 | Biztonság és hitelesítés | ⬜ hátravan |
+| 10 | Biztonság és hitelesítés | ✅ kész |
 | 11 | Telepítés, üzemeltetés, tesztelési terv | ⬜ hátravan |
 
 ### Ami a következő szegmensekre marad
@@ -94,8 +97,6 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
-  szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az
   URL-ekkel, a `cloudflared` Windows service és a watchdog ütemezett feladat
   telepítése.

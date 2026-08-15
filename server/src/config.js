@@ -20,10 +20,22 @@ const bool = (value, fallback) => {
 export const config = {
   port: num(process.env.ONLIVE_SERVER_PORT, 3000),
 
-  /** A telefon és az admin felület hitelesítése (teljes körűen: 10. szegmens). */
+  /** Hitelesítés (10. szegmens). */
   streamKey: process.env.ONLIVE_STREAM_KEY ?? '',
   adminPassword: process.env.ONLIVE_ADMIN_PASSWORD ?? '',
+  /**
+   * Az admin jelszó scrypt hash-e (`npm run hash-password`). Ha meg van adva,
+   * ez az elsődleges — a sima szöveges jelszó ilyenkor nem is kell.
+   */
+  adminPasswordHash: process.env.ONLIVE_ADMIN_PASSWORD_HASH ?? '',
   hookSecret: process.env.ONLIVE_HOOK_SECRET ?? '',
+  /**
+   * Engedélyezett-e a fejléces admin hitelesítés (`X-OnLIVE-Admin-Password`).
+   * Szkriptekhez és curl-höz kell; ha csak böngészőből vezérelsz, kapcsold ki.
+   */
+  allowHeaderAuth: bool(process.env.ONLIVE_ALLOW_HEADER_AUTH, true),
+  /** Meddig él egy admin munkamenet az utolsó használat után. */
+  sessionTtlMs: num(process.env.ONLIVE_SESSION_TTL_MS, 12 * 60 * 60 * 1000),
 
   /**
    * A `/live` oldal és a lejátszás-proxy védelme (6. szegmens).

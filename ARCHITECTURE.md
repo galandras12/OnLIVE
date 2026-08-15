@@ -137,8 +137,10 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   tovább publikálna egy weben lezárt adás alatt.
 - **WebSocket állapot-szinkron:** minden csatlakozott kliens (telefon, admin UI,
   `/live` oldal) valós időben megkapja az aktuális állapotot.
-- **Hitelesítés és jogosultság:** admin jelszó, ingest streamkulcs kiadása/ellenőrzése
-  (részletek: 10. szegmens).
+- **Hitelesítés és jogosultság:** három elkülönített szint — admin
+  (munkamenet-süti, CSRF, sebességkorlát), telefon (streamkulcs), néző
+  (opcionális, **csak megtekintésre** jó lejátszási token).
+  Részletek: **[`docs/SECURITY.md`](docs/SECURITY.md)** (10. szegmens).
 - **Naplózás és jelentés:** minden állapotátmenet és 3 másodpercenként a
   telemetria fájlba írása, ebből időszakos (élő/kiesés) jelentés és letölthető
   CSV (**[`docs/MONITORING.md`](docs/MONITORING.md)**, 9. szegmens).
@@ -233,7 +235,8 @@ OnLIVE/
 │   ├── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
 │   ├── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
 │   ├── ADMIN-UI.md            # 8. szegmens — admin felület, parancscsatorna
-│   └── MONITORING.md          # 9. szegmens — monitor, napló, link-gyűjtő
+│   ├── MONITORING.md          # 9. szegmens — monitor, napló, link-gyűjtő
+│   └── SECURITY.md            # 10. szegmens — jogosultságok, bejelentkezés
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -254,6 +257,7 @@ OnLIVE/
 │   ├── src/device/            # web UI → telefon parancssor és jelenlét
 │   ├── src/log/               # metrika-rögzítés és napló-összeállítás (CSV)
 │   ├── src/links/             # chat-link gyűjtő
+│   ├── src/security/          # jelszó-hash, munkamenetek, sebességkorlát
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
@@ -286,5 +290,5 @@ A teljes, előre rögzített szegmens-lista:
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | web | ✅ kész |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ✅ kész |
-| 10 | Biztonság és hitelesítés | szerver | ⬜ hátravan |
+| 10 | Biztonság és hitelesítés | szerver | ✅ kész |
 | 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ⬜ hátravan |

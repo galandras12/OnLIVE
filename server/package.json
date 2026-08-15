@@ -12,7 +12,9 @@
     "start": "node --env-file=../.env src/index.js",
     "start:noenv": "node src/index.js",
     "dev": "node --env-file=../.env --watch src/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "keygen": "node tools/keygen.js",
+    "hash-password": "node tools/keygen.js hash"
   },
   "dependencies": {
     "express": "^4.21.2",

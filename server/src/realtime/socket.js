@@ -16,7 +16,7 @@
  */
 
 import { Server } from 'socket.io';
-import { isLiveTokenValid } from '../api/auth.js';
+import { isAdminSocket, isLiveTokenValid } from '../api/auth.js';
 
 export const SocketEvents = Object.freeze({
   /** Teljes pillanatkép — csatlakozáskor és minden változáskor. */
@@ -69,7 +69,7 @@ function publicView(snapshot) {
   };
 }
 
-export function attachSocket(httpServer, { controller, mediaStore, overlayStore, config, logger }) {
+export function attachSocket(httpServer, { controller, mediaStore, overlayStore, config, sessions, logger }) {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
     serveClient: true,
@@ -83,7 +83,17 @@ export function attachSocket(httpServer, { controller, mediaStore, overlayStore,
   });
 
   io.on('connection', (socket) => {
-    const role = socket.handshake.query?.role === 'admin' ? 'admin' : 'live';
+    /*
+      A szerep nem kérés kérdése, hanem jogosultságé (10. szegmens): az admin
+      csatorna telemetriát, ingest-részleteket és session-azonosítót is szór.
+      Aki nem tud felmutatni admin munkamenetet, `live` szerepet kap — akkor
+      is, ha adminként jelentkezett be.
+    */
+    const wantsAdmin = socket.handshake.query?.role === 'admin';
+    const role = wantsAdmin && isAdminSocket(config ?? {}, socket.handshake, sessions) ? 'admin' : 'live';
+    if (wantsAdmin && role !== 'admin') {
+      logger.warn(`Admin socket-szerep elutasítva: ${socket.id}`);
+    }
     socket.join(role);
 
     logger.info(`Socket csatlakozott: ${socket.id} (szerep: ${role})`);

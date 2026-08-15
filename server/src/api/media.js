@@ -14,12 +14,11 @@ import { stat } from 'node:fs/promises';
 
 import { SLOTS } from '../media/store.js';
 import { ALLOWED_MIME_TYPES, validateMedia } from '../media/validate.js';
-import { adminAuth } from './auth.js';
 
 /** 512 MB — egy intro/outro videóhoz bőven elég, de nem engedi a lemezt megtölteni. */
 const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
-export function createMediaRoutes({ config, mediaStore, controller, logger, liveAuth }) {
+export function createMediaRoutes({ config, mediaStore, controller, logger, liveAuth, adminGuard }) {
   // Ha a `/live` tokennel védett, a médiafájlok is azok — különben az intro
   // és az outro videó token nélkül letölthető maradna.
   const guard = liveAuth ?? ((req, res, next) => next());
@@ -35,7 +34,7 @@ export function createMediaRoutes({ config, mediaStore, controller, logger, live
   // =========================================================================
 
   const admin = Router();
-  admin.use(adminAuth(config, logger));
+  admin.use(adminGuard);
 
   admin.get('/', (req, res) => res.json(mediaStore.manifest()));
 

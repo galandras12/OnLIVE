@@ -15,9 +15,9 @@
 import { Router } from 'express';
 import { Events } from '../state/machine.js';
 import { DeviceCommands } from '../device/commands.js';
-import { adminAuth, hookAuth, phoneAuth } from './auth.js';
+import { hookAuth, phoneAuth } from './auth.js';
 
-export function createRoutes({ config, controller, monitor, store, commands, logger, startedAt }) {
+export function createRoutes({ config, controller, monitor, store, commands, limiter, adminGuard, logger, startedAt }) {
   const router = Router();
 
   // =========================================================================
@@ -25,7 +25,7 @@ export function createRoutes({ config, controller, monitor, store, commands, log
   // =========================================================================
 
   const session = Router();
-  session.use(phoneAuth(config, logger));
+  session.use(phoneAuth(config, logger, limiter));
 
   session.post('/start', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
@@ -103,7 +103,7 @@ export function createRoutes({ config, controller, monitor, store, commands, log
   // =========================================================================
 
   const admin = Router();
-  admin.use(adminAuth(config, logger));
+  admin.use(adminGuard);
 
   const adminEvents = {
     start: Events.SESSION_START,

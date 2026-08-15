@@ -67,20 +67,6 @@
 <main>
 
   <div class="card">
-    <h2>Belépés</h2>
-    <p class="hint">
-      Az admin jelszó a böngészőben marad (localStorage), és minden kéréshez
-      elmegy. A teljes munkamenet-kezelés a 10. szegmensben készül el.
-    </p>
-    <div class="row">
-      <input type="password" id="password" placeholder="admin jelszó"
-             style="background:#0b0f14;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem">
-      <button id="savePassword">Mentés</button>
-      <span class="status" id="authStatus"></span>
-    </div>
-  </div>
-
-  <div class="card">
     <h2>Outro hossza</h2>
     <p class="hint">
       Ennyi ideig megy az outro, utána a rendszer automatikusan
@@ -115,6 +101,7 @@
 
 </main>
 
+<script src="/admin-auth.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (() => {
@@ -124,12 +111,8 @@
     { id: 'outro', title: 'Outro', hint: 'A Befejezés után látható, a fent beállított ideig.' },
   ];
 
-  const password = {
-    get: () => localStorage.getItem('onlive.admin') ?? '',
-    set: (value) => localStorage.setItem('onlive.admin', value),
-  };
 
-  const headers = () => ({ 'X-OnLIVE-Admin-Password': password.get() });
+  const { api, requireAuth } = window.OnLiveAdmin;
 
   function setStatus(el, message, kind) {
     el.textContent = message;
@@ -187,8 +170,8 @@
 
     setStatus(status, 'Feltöltés…');
     try {
-      const response = await fetch('/api/admin/media/' + id, {
-        method: 'POST', headers: headers(), body: form,
+      const response = await api('/api/admin/media/' + id, {
+        method: 'POST',  body: form,
       });
       const body = await response.json();
       if (!response.ok) return setStatus(status, body.error ?? 'Sikertelen feltöltés.', 'err');
@@ -206,7 +189,7 @@
 
   async function deleteSlot(id) {
     const status = cards[id].querySelector('[data-role=status]');
-    const response = await fetch('/api/admin/media/' + id, { method: 'DELETE', headers: headers() });
+    const response = await api('/api/admin/media/' + id, { method: 'DELETE', headers: headers() });
     if (!response.ok) return setStatus(status, 'Sikertelen törlés.', 'err');
     setStatus(status, 'Törölve.', 'ok');
     await loadManifest();
@@ -221,7 +204,7 @@
       muted: card.querySelector('[data-role=muted]').checked,
       fit: card.querySelector('[data-role=fit]').value,
     };
-    const response = await fetch('/api/admin/media/' + id, {
+    const response = await api('/api/admin/media/' + id, {
       method: 'PATCH',
       headers: { ...headers(), 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -281,7 +264,7 @@
   document.getElementById('saveDuration').addEventListener('click', async () => {
     const status = document.getElementById('durationStatus');
     const seconds = Number(document.getElementById('outroDuration').value);
-    const response = await fetch('/api/admin/media/settings', {
+    const response = await api('/api/admin/media/settings', {
       method: 'POST',
       headers: { ...headers(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ outroDurationSeconds: seconds }),
@@ -292,13 +275,6 @@
 
   // --- jelszó ----------------------------------------------------------------
 
-  document.getElementById('password').value = password.get();
-  document.getElementById('savePassword').addEventListener('click', async () => {
-    password.set(document.getElementById('password').value);
-    const status = document.getElementById('authStatus');
-    const response = await fetch('/api/admin/media', { headers: headers() });
-    setStatus(status, response.ok ? 'Rendben.' : 'Érvénytelen jelszó.', response.ok ? 'ok' : 'err');
-  });
 
   // --- előnézet --------------------------------------------------------------
 
@@ -325,7 +301,7 @@
   });
   socket.on('onlive:media', loadManifest);
 
-  loadManifest();
+  requireAuth().then(loadManifest);
 })();
 </script>
 </body>
