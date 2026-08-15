@@ -1,32 +1,15 @@
 /**
- * Minimális naplózó. Szándékosan függőség nélkül: egy élő közvetítő
- * szervernél a konzol az elsődleges visszajelzés, nem egy log-aggregátor.
+ * A projekt közös naplózója (11. szegmens).
+ *
+ * Korábban ez egy egyszerű konzol-wrapper volt. Mostantól a strukturált
+ * `log/logger.js` példánya, ami a konzol mellé JSON sorokat is ír a
+ * `logs/YYYY-MM-DD.log` fájlba. A régi API (`info`/`warn`/`error`/`ok`/
+ * `state`/`colors`) változatlan, tehát minden korábbi hívás működik tovább.
  */
 
-const COLORS = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-};
+import { Logger } from '../log/logger.js';
+import { config } from '../config.js';
 
-const stamp = () => new Date().toISOString().slice(11, 19);
+export const logger = new Logger({ logDir: config.logDir });
 
-function write(stream, color, tag, message, extra) {
-  const line = `${COLORS.dim}${stamp()}${COLORS.reset} ${color}${tag.padEnd(5)}${COLORS.reset} ${message}`;
-  if (extra === undefined) stream(line);
-  else stream(line, extra);
-}
-
-export const logger = {
-  info: (message, extra) => write(console.log, COLORS.blue, 'INFO', message, extra),
-  ok: (message, extra) => write(console.log, COLORS.green, 'OK', message, extra),
-  warn: (message, extra) => write(console.warn, COLORS.yellow, 'WARN', message, extra),
-  error: (message, extra) => write(console.error, COLORS.red, 'HIBA', message, extra),
-  state: (message, extra) => write(console.log, COLORS.magenta, 'ÁLL.', message, extra),
-  colors: COLORS,
-};
+export { LogEvent, Source, clientId, diffSettings, describeChanges } from '../log/logger.js';

@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { Events } from '../state/machine.js';
 import { DeviceCommands } from '../device/commands.js';
+import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 import { hookAuth, phoneAuth } from './auth.js';
 
 export function createRoutes({ config, controller, monitor, store, commands, limiter, adminGuard, logger, startedAt }) {
@@ -30,30 +31,47 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   session.post('/start', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
     commands.touch({ device: req.body?.device, capture: req.body });
-    const result = controller.send(Events.SESSION_START, {}, 'phone');
+    const result = controller.send(Events.SESSION_START, {}, Source.PHONE, clientId(req));
     res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
   });
 
   session.post('/pause', (req, res) => {
-    const result = controller.send(Events.SESSION_PAUSE, { reason: req.body?.reason }, 'phone');
+    const result = controller.send(Events.SESSION_PAUSE, { reason: req.body?.reason }, Source.PHONE, clientId(req));
     res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
   });
 
   session.post('/resume', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
-    const result = controller.send(Events.SESSION_RESUME, {}, 'phone');
+    const result = controller.send(Events.SESSION_RESUME, {}, Source.PHONE, clientId(req));
     res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
   });
 
   session.post('/end', (req, res) => {
-    const result = controller.send(Events.SESSION_END, { reason: req.body?.reason }, 'phone');
+    const result = controller.send(Events.SESSION_END, { reason: req.body?.reason }, Source.PHONE, clientId(req));
     res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
   });
 
   /** Menet közbeni beállítás-változás (felbontás, lencse, forrás…). */
   session.post('/config', (req, res) => {
+    // A telefonon végzett beállítás-változtatás is naplózandó, régi → új
+    // értékkel, hogy a két felület módosításai együtt legyenek visszakereshetők.
+    const before = controller.capture;
     controller.updateCapture(req.body ?? {});
     commands.touch({ device: req.body?.device, capture: req.body });
+
+    const changes = diffSettings(before, controller.capture, [
+      'resolution', 'fps', 'videoBitrateKbps', 'source', 'lens', 'audio',
+    ]);
+    if (changes) {
+      logger.event({
+        type: LogEvent.SETTINGS,
+        source: Source.PHONE,
+        client: clientId(req),
+        message: `Capture beállítás a telefonon — ${describeChanges(changes)}`,
+        area: 'capture',
+        changes,
+      });
+    }
     res.json({ ok: true });
   });
 
@@ -114,7 +132,10 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
 
   for (const [name, event] of Object.entries(adminEvents)) {
     admin.post(`/${name}`, (req, res) => {
-      const result = controller.send(event, { reason: req.body?.reason }, 'admin');
+      // Forrás és kliens: a naplóban meg kell tudni különböztetni, hogy a
+      // Kezdés/Befejezés a telefonról vagy a web felületről (és melyik
+      // böngészőből) jött — a két felület ugyanazt az átmenetet váltja ki.
+      const result = controller.send(event, { reason: req.body?.reason }, Source.WEB, clientId(req));
       res.json({
         ok: true,
         changed: result.changed,

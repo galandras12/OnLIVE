@@ -14,6 +14,7 @@
 import { Router } from 'express';
 import { DeviceCommands } from '../device/commands.js';
 import { Events } from '../state/machine.js';
+import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 
 /** Az admin gomb → állapotgép-esemény + telefon-parancs párosítás. */
 const SESSION_ACTIONS = {
@@ -33,7 +34,16 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
   /** Session-vezérlés a web UI-ról — a telefon is megkapja. */
   for (const [name, action] of Object.entries(SESSION_ACTIONS)) {
     admin.post(`/${name}`, (req, res) => {
-      const result = controller.send(action.event, { reason: 'admin' }, 'admin');
+      const client = clientId(req);
+      logger.event({
+        type: LogEvent.SESSION,
+        source: Source.WEB,
+        client,
+        message: `Session-vezérlés a web UI-ról: ${name}`,
+        action: name,
+      });
+
+      const result = controller.send(action.event, { reason: 'admin' }, Source.WEB, client);
       commands.push(action.command);
       res.json({ ok: true, changed: result.changed, state: result.snapshot.state });
     });
@@ -45,6 +55,7 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
     if (!['front', 'main', 'tele', 'ultra_wide'].includes(lens)) {
       return res.status(400).json({ error: `Ismeretlen lencse: ${lens}` });
     }
+    logChange(req, 'kamera', { lencse: { regi: commands.presence.capture?.lens ?? null, uj: lens } });
     res.json({ ok: true, command: commands.push(DeviceCommands.SET_LENS, { lens }) });
   });
 
@@ -61,6 +72,7 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
     if (!['camera', 'screen'].includes(source)) {
       return res.status(400).json({ error: `Ismeretlen forrás: ${source}` });
     }
+    logChange(req, 'kamera', { forras: { regi: commands.presence.capture?.source ?? null, uj: source } });
     res.json({
       ok: true,
       command: commands.push(DeviceCommands.SET_SOURCE, { source }),
@@ -115,18 +127,44 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
       return res.status(400).json({ error: 'Nincs értelmezhető minőségi beállítás.' });
     }
 
+    // A régi értékeket a telefon utolsó `session/config` jelzéséből tudjuk.
+    const current = commands.presence.capture ?? {};
+    const changes = diffSettings(
+      {
+        resolution: current.resolution, fps: current.fps,
+        videoBitrateKbps: current.videoBitrateKbps,
+        audioSampleRate: current.audio?.sampleRate, audioBitrateKbps: current.audio?.bitrateKbps,
+      },
+      payload,
+    );
+    if (changes) logChange(req, 'minoseg', changes);
+
     res.json({ ok: true, command: commands.push(DeviceCommands.SET_QUALITY, payload) });
   });
 
   /** Kiegészítők: vaku, kép mentése, helyi felvétel. */
-  admin.post('/torch', (req, res) =>
-    res.json({ ok: true, command: commands.push(DeviceCommands.TORCH, { on: req.body?.on === true }) }));
+  admin.post('/torch', (req, res) => {
+    logChange(req, 'kamera', { vaku: { regi: null, uj: req.body?.on === true } });
+    res.json({ ok: true, command: commands.push(DeviceCommands.TORCH, { on: req.body?.on === true }) });
+  });
 
   admin.post('/photo', (req, res) =>
     res.json({ ok: true, command: commands.push(DeviceCommands.PHOTO) }));
 
   admin.post('/recording', (req, res) =>
     res.json({ ok: true, command: commands.push(DeviceCommands.RECORDING) }));
+
+  /** Beállítás-változás naplózása egységes formában. */
+  function logChange(req, area, changes) {
+    logger.event({
+      type: LogEvent.SETTINGS,
+      source: Source.WEB,
+      client: clientId(req),
+      message: `${area === 'minoseg' ? 'Minőség' : 'Kamera'} módosítás — ${describeChanges(changes)}`,
+      area,
+      changes,
+    });
+  }
 
   router.use('/api/admin/device', admin);
   return router;

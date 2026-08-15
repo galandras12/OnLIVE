@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { buildPeriods, summarize, toChartSeries, toCsv } from '../log/report.js';
+import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 
 export function createMonitorRoutes({ config, store, metrics, links, logger, adminGuard }) {
   const router = Router();
@@ -99,7 +100,11 @@ export function createMonitorRoutes({ config, store, metrics, links, logger, adm
 
   admin.post('/links', async (req, res) => {
     try {
-      res.json({ ok: true, link: await links.create(req.body ?? {}) });
+      const link = await links.create(req.body ?? {});
+      logLinkChange(req, `Chat-link hozzáadva: ${link.name}`, {
+        nev: { regi: null, uj: link.name }, url: { regi: null, uj: link.url },
+      });
+      res.json({ ok: true, link });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -107,7 +112,11 @@ export function createMonitorRoutes({ config, store, metrics, links, logger, adm
 
   admin.patch('/links/:id', async (req, res) => {
     try {
-      res.json({ ok: true, link: await links.update(req.params.id, req.body ?? {}) });
+      const before = links.list().find((item) => item.id === req.params.id);
+      const link = await links.update(req.params.id, req.body ?? {});
+      const changes = diffSettings(before, link, ['name', 'url', 'public']);
+      if (changes) logLinkChange(req, `Chat-link módosítva: ${link.name}`, changes);
+      res.json({ ok: true, link });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -115,12 +124,26 @@ export function createMonitorRoutes({ config, store, metrics, links, logger, adm
 
   admin.delete('/links/:id', async (req, res) => {
     try {
-      await links.remove(req.params.id);
+      const removed = await links.remove(req.params.id);
+      logLinkChange(req, `Chat-link törölve: ${removed.name}`, {
+        nev: { regi: removed.name, uj: null },
+      });
       res.json({ ok: true });
     } catch (error) {
       res.status(404).json({ error: error.message });
     }
   });
+
+  function logLinkChange(req, message, changes) {
+    logger.event({
+      type: LogEvent.SETTINGS,
+      source: Source.WEB,
+      client: clientId(req),
+      message: `${message} — ${describeChanges(changes)}`,
+      area: 'links',
+      changes,
+    });
+  }
 
   router.use('/api/admin', admin);
 

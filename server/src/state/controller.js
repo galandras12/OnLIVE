@@ -13,6 +13,7 @@
 
 import { EventEmitter } from 'node:events';
 import { Effects, Events, States, StreamStateMachine } from './machine.js';
+import { LogEvent, Source } from '../log/logger.js';
 
 export class SessionController extends EventEmitter {
   /**
@@ -66,15 +67,25 @@ export class SessionController extends EventEmitter {
   /**
    * @param {string} event a machine.Events egyike
    * @param {object} [payload]
-   * @param {string} [source] ki küldte: 'phone' | 'admin' | 'ingest' | 'timer'
+   * @param {string} [source] ki küldte — a {@link Source} egyike
+   * @param {string} [client] kliens-azonosító (IP / munkamenet-ujjlenyomat)
    */
-  send(event, payload = {}, source = 'system') {
+  send(event, payload = {}, source = Source.SYSTEM, client) {
     const result = this.machine.send(event, payload);
 
     if (result.changed) {
-      this.logger.state(
-        `${result.from} → ${result.to}   (${event}, forrás: ${source})`,
-      );
+      this.logger.event({
+        type: LogEvent.STATE,
+        level: 'state',
+        source,
+        client,
+        message: `${result.from} → ${result.to}   (${event})`,
+        from: result.from,
+        to: result.to,
+        trigger: event,
+        sessionId: result.snapshot.context.sessionId,
+        liveElapsedMs: result.snapshot.liveElapsedMs,
+      });
       this.#runEffects(result.effects);
       this.#persist(result, source, payload);
     } else if (event !== Events.INGEST_UP && event !== Events.INGEST_DOWN) {
@@ -96,7 +107,7 @@ export class SessionController extends EventEmitter {
           this.logger.info(`Outro indul, ${Math.round(ms / 1000)} másodperc.`);
           this.outroTimer = setTimeout(() => {
             this.outroTimer = null;
-            this.send(Events.OUTRO_DONE, {}, 'timer');
+            this.send(Events.OUTRO_DONE, {}, Source.TIMER);
           }, ms);
           this.outroTimer.unref?.();
           break;
@@ -191,12 +202,29 @@ export class SessionController extends EventEmitter {
     const wasAvailable = this.ingest.available;
 
     this.ingest = { ...this.ingest, ...status };
-    if (status.flowing !== wasFlowing) this.ingest.lastChangeAt = Date.now();
+    if (status.flowing !== wasFlowing) {
+      this.ingest.lastChangeAt = Date.now();
+      // WHIP ingest kapcsolat létrejötte/megszakadása — a telefon oldala.
+      this.logger.event({
+        type: LogEvent.INGEST,
+        level: status.flowing ? 'ok' : 'warn',
+        source: Source.INGEST,
+        message: status.flowing
+          ? `Bejövő stream megérkezett (${(status.tracks ?? []).join(', ') || 'ismeretlen sávok'}).`
+          : status.stalled
+            ? 'A bejövő stream megállt (a publisher csatlakozva van, de nem küld adatot).'
+            : 'A bejövő stream megszakadt.',
+        flowing: status.flowing,
+        stalled: Boolean(status.stalled),
+        tracks: status.tracks ?? [],
+        sourceType: status.sourceType ?? null,
+      });
+    }
 
     this.send(
       status.flowing ? Events.INGEST_UP : Events.INGEST_DOWN,
       { stalled: status.stalled },
-      'ingest',
+      Source.INGEST,
     );
 
     if (status.available !== wasAvailable) {

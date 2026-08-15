@@ -150,7 +150,10 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   böngésző egyetlen originnel beszéljen, és a MediaMTX olvasási joga
   localhostra szorítva maradhasson (6. szegmens).
 - **Indítási visszajelzés:** a `start.bat`-tal indított konzolban keretezett
-  „OnLIVE szerver elindult” üzenet az elérhető URL-ekkel (11. szegmens).
+  „OnLIVE szerver elindult” üzenet az elérhető URL-ekkel, és **minden esemény
+  egyetlen, strukturált naplóba** kerül — forrással (telefon / web UI / OBS /
+  ingest) és kliens-azonosítóval együtt
+  (**[`docs/OPERATIONS.md`](docs/OPERATIONS.md)**, 11. szegmens).
 
 **Kifejezetten NEM felelős ezért:**
 
@@ -236,7 +239,8 @@ OnLIVE/
 │   ├── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
 │   ├── ADMIN-UI.md            # 8. szegmens — admin felület, parancscsatorna
 │   ├── MONITORING.md          # 9. szegmens — monitor, napló, link-gyűjtő
-│   └── SECURITY.md            # 10. szegmens — jogosultságok, bejelentkezés
+│   ├── SECURITY.md            # 10. szegmens — jogosultságok, bejelentkezés
+│   └── OPERATIONS.md          # 11. szegmens — telepítés, indítás, napló, tesztterv
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -249,19 +253,23 @@ OnLIVE/
 ├── scripts/
 │   ├── tunnel-watchdog.ps1        # alagút-figyelő + automatikus restart
 │   └── install-tunnel-watchdog.ps1# ütemezett feladat regisztrálása
+├── start.bat                  # egy kattintás: tunnel → MediaMTX → szerver (11. szegmens)
+├── logs/                      # startup.log — a .bat indítási/leállási sorai
 ├── server/                    # vezérlő szerver (4. szegmens)
 │   ├── src/state/             # ★ machine.js (tiszta), controller.js, store.js
 │   ├── src/ingest/            # monitor.js (poll, debounce) + control.js (kick)
 │   ├── src/media/             # média-tár és tartalom-alapú validáció
 │   ├── src/overlay/           # widgetek: pozíció, láthatóság, beágyazás-kulcsok
 │   ├── src/device/            # web UI → telefon parancssor és jelenlét
-│   ├── src/log/               # metrika-rögzítés és napló-összeállítás (CSV)
+│   ├── src/log/               # ★ logger.js (egységes JSON napló) + metrika és CSV
 │   ├── src/links/             # chat-link gyűjtő
 │   ├── src/security/          # jelszó-hash, munkamenetek, sebességkorlát
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
-│   └── test/                  # az állapotgép és a controller tesztjei
+│   ├── tools/start.js         # az `npm start` indítója (függő folyamatok ellenőrzése)
+│   ├── logs/                  # YYYY-MM-DD.log — soronként egy JSON esemény
+│   └── test/                  # egységtesztek + a 4 kötelező forgatókönyv
 ├── web/                       # admin UI + /live oldal (későbbi szegmens)
 └── android/                   # OnLIVE Android app (2. szegmens)
     └── app/src/main/java/com/galandras/onlive/
@@ -291,4 +299,4 @@ A teljes, előre rögzített szegmens-lista:
 | 8 | Web UI: admin/vezérlő felület | web | ✅ kész |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ✅ kész |
 | 10 | Biztonság és hitelesítés | szerver | ✅ kész |
-| 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ⬜ hátravan |
+| 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ✅ kész |

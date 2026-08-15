@@ -39,7 +39,11 @@ import { readFileSync } from 'node:fs';
 const startedAt = Date.now();
 
 const store = new Store(config.dataDir, logger);
-const mediaStore = new MediaStore({ dataDir: config.dataDir, logger });
+const mediaStore = new MediaStore({
+  dataDir: config.dataDir,
+  logger,
+  defaultOutroSeconds: config.machine.outroDurationMs / 1000,
+});
 const overlayStore = new OverlayStore({ dataDir: config.dataDir, logger });
 /** A web UI → telefon parancscsatorna (8. szegmens). */
 const commands = new DeviceCommandQueue({ logger });

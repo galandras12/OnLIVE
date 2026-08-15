@@ -17,6 +17,7 @@
 
 import { Server } from 'socket.io';
 import { isAdminSocket, isLiveTokenValid } from '../api/auth.js';
+import { LogEvent, Source } from '../log/logger.js';
 
 export const SocketEvents = Object.freeze({
   /** Teljes pillanatkép — csatlakozáskor és minden változáskor. */
@@ -96,7 +97,24 @@ export function attachSocket(httpServer, { controller, mediaStore, overlayStore,
     }
     socket.join(role);
 
-    logger.info(`Socket csatlakozott: ${socket.id} (szerep: ${role})`);
+    /*
+      Az OBS Browser Source és egy sima böngésző is `live` szerepben jön, de
+      a User-Agentből megkülönböztethető — az OBS beépített CEF-je jellemzően
+      "OBS" jelölést visz. A naplóban így látszik, mikor csatlakozott rá az
+      OBS, és mikor egy néző.
+    */
+    const agent = String(socket.handshake.headers['user-agent'] ?? '');
+    const kind = role === 'admin' ? Source.WEB : (/OBS|CEF/i.test(agent) ? Source.OBS : Source.WEB);
+    const ip = socket.handshake.address ?? 'ismeretlen';
+
+    logger.event({
+      type: LogEvent.CLIENT,
+      source: kind,
+      client: `${ip}/${socket.id.slice(0, 6)}`,
+      message: `Kapcsolat létrejött (${kind === Source.OBS ? 'OBS Browser Source' : role === 'admin' ? 'admin felület' : 'néző'}).`,
+      role,
+      userAgent: agent.slice(0, 120),
+    });
 
     const snapshot = controller.snapshot();
     socket.emit(SocketEvents.STATE, role === 'admin' ? snapshot : publicView(snapshot));
@@ -104,7 +122,14 @@ export function attachSocket(httpServer, { controller, mediaStore, overlayStore,
     if (overlayStore) socket.emit(SocketEvents.OVERLAY, overlayStore.manifest());
 
     socket.on('disconnect', (reason) => {
-      logger.info(`Socket lecsatlakozott: ${socket.id} (${reason})`);
+      logger.event({
+        type: LogEvent.CLIENT,
+        source: kind,
+        client: `${ip}/${socket.id.slice(0, 6)}`,
+        message: `Kapcsolat megszakadt (${reason}).`,
+        role,
+        reason,
+      });
     });
   });
 

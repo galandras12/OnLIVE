@@ -14,6 +14,7 @@ import { stat } from 'node:fs/promises';
 
 import { SLOTS } from '../media/store.js';
 import { ALLOWED_MIME_TYPES, validateMedia } from '../media/validate.js';
+import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 
 /** 512 MB — egy intro/outro videóhoz bőven elég, de nem engedi a lemezt megtölteni. */
 const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
@@ -40,7 +41,20 @@ export function createMediaRoutes({ config, mediaStore, controller, logger, live
 
   admin.post('/settings', async (req, res) => {
     try {
+      const before = mediaStore.settings;
       const settings = await mediaStore.setOutroDuration(req.body?.outroDurationSeconds);
+
+      const changes = diffSettings(before, settings);
+      if (changes) {
+        logger.event({
+          type: LogEvent.SETTINGS,
+          source: Source.WEB,
+          client: clientId(req),
+          message: `Outro beállítás módosítva — ${describeChanges(changes)}`,
+          area: 'outro',
+          changes,
+        });
+      }
       // Az állapotgép a következő outrónál már ezt az értéket használja
       // (a controller függvényként kéri le, nem fix értékként).
       controller.emit('change', controller.snapshot(), null);
@@ -68,12 +82,27 @@ export function createMediaRoutes({ config, mediaStore, controller, logger, live
     }
 
     try {
+      const before = mediaStore.manifest().slots[slot];
       const entry = await mediaStore.setSlot(slot, {
         buffer: req.file.buffer,
         mime: check.mime,
         kind: check.kind,
         ext: check.ext,
         originalName: req.file.originalname,
+      });
+
+      logger.event({
+        type: LogEvent.SETTINGS,
+        level: 'ok',
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Overlay média csere (${slot}): ${before?.originalName ?? 'nem volt'} → ${entry.originalName}`,
+        area: 'media',
+        slot,
+        changes: {
+          fajl: { regi: before?.originalName ?? null, uj: entry.originalName },
+          tipus: { regi: before?.mime ?? null, uj: entry.mime },
+        },
       });
       broadcastMedia();
       res.json({ ok: true, slot, media: entry });
@@ -85,7 +114,21 @@ export function createMediaRoutes({ config, mediaStore, controller, logger, live
 
   admin.patch('/:slot', async (req, res) => {
     try {
+      const before = mediaStore.manifest().slots[req.params.slot]?.options;
       const entry = await mediaStore.setSlotOptions(req.params.slot, req.body ?? {});
+
+      const changes = diffSettings(before, entry.options);
+      if (changes) {
+        logger.event({
+          type: LogEvent.SETTINGS,
+          source: Source.WEB,
+          client: clientId(req),
+          message: `Média beállítás (${req.params.slot}) — ${describeChanges(changes)}`,
+          area: 'media',
+          slot: req.params.slot,
+          changes,
+        });
+      }
       broadcastMedia();
       res.json({ ok: true, media: entry });
     } catch (error) {
@@ -95,7 +138,18 @@ export function createMediaRoutes({ config, mediaStore, controller, logger, live
 
   admin.delete('/:slot', async (req, res) => {
     try {
+      const before = mediaStore.manifest().slots[req.params.slot];
       await mediaStore.clearSlot(req.params.slot);
+
+      logger.event({
+        type: LogEvent.SETTINGS,
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Overlay média törölve (${req.params.slot}): ${before?.originalName ?? '–'}`,
+        area: 'media',
+        slot: req.params.slot,
+        changes: { fajl: { regi: before?.originalName ?? null, uj: null } },
+      });
       broadcastMedia();
       res.json({ ok: true });
     } catch (error) {

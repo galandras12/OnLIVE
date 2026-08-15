@@ -88,8 +88,20 @@ export const config = {
     shutdownOnEnded: bool(process.env.ONLIVE_SHUTDOWN_ON_ENDED, false),
   },
 
-  /** Fájl-alapú tárolás (a 9. szegmens naplója is innen fog építkezni). */
-  dataDir: process.env.ONLIVE_DATA_DIR ?? new URL('../data/', import.meta.url).pathname,
+  /** Fájl-alapú tárolás. */
+  // `||`, nem `??`: az üresen hagyott sor a `.env`-ben is az alapértelmezést
+  // jelentse, ne kikapcsolt naplózást.
+  dataDir: process.env.ONLIVE_DATA_DIR || new URL('../data/', import.meta.url).pathname,
+  /** Dátum szerint forgó esemény-napló (11. szegmens). */
+  logDir: process.env.ONLIVE_LOG_DIR || new URL('../logs/', import.meta.url).pathname,
+  /** Induláskor a hiányzó függő folyamatok elindítása (npm start). */
+  autostart: {
+    mediamtx: bool(process.env.ONLIVE_AUTOSTART_MEDIAMTX, true),
+    tunnel: bool(process.env.ONLIVE_AUTOSTART_TUNNEL, true),
+    mediamtxPath: process.env.ONLIVE_MEDIAMTX_PATH ?? 'C:\\OnLIVE\\mediamtx\\mediamtx.exe',
+    mediamtxConfig: process.env.ONLIVE_MEDIAMTX_CONFIG ?? 'C:\\OnLIVE\\mediamtx\\mediamtx.yml',
+    tunnelService: process.env.ONLIVE_TUNNEL_SERVICE ?? 'cloudflared',
+  },
 
   publicUrls: {
     admin: process.env.ONLIVE_PUBLIC_ADMIN_URL ?? 'https://admin.galandras.com',

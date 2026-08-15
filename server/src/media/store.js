@@ -54,11 +54,22 @@ const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export class MediaStore {
-  constructor({ dataDir, logger }) {
+  /**
+   * @param {number} [defaultOutroSeconds] az outro KEZDŐ hossza, ha még nem
+   *   állította senki az admin felületen. Az `ONLIVE_OUTRO_DURATION_MS`
+   *   környezeti változóból jön — enélkül a dokumentált beállításnak nem
+   *   lenne hatása, mert az outro hosszát mindig innen kéri a controller.
+   */
+  constructor({ dataDir, logger, defaultOutroSeconds }) {
     this.logger = logger;
     this.mediaDir = path.join(dataDir, 'media');
     this.metaPath = path.join(dataDir, 'media.json');
-    this.data = { slots: { intro: null, interrupted: null, outro: null }, settings: { ...DEFAULT_SETTINGS } };
+
+    const settings = { ...DEFAULT_SETTINGS };
+    if (Number.isFinite(defaultOutroSeconds) && defaultOutroSeconds >= 1) {
+      settings.outroDurationSeconds = Math.round(defaultOutroSeconds);
+    }
+    this.data = { slots: { intro: null, interrupted: null, outro: null }, settings };
     this.ready = this.#load();
   }
 

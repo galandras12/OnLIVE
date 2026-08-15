@@ -18,6 +18,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 
 import { validateMedia, MediaKind } from '../media/validate.js';
+import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 const MAX_EMBED_CHARS = 64 * 1024;
@@ -103,6 +104,15 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
         return res.status(413).json({ error: 'A beágyazott kód túl hosszú.' });
       }
       const widget = await overlayStore.create(body);
+      logger.event({
+        type: LogEvent.SETTINGS,
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Widget létrehozva: ${widget.name} (${widget.type})`,
+        area: 'widget',
+        widgetId: widget.id,
+        widgetType: widget.type,
+      });
       broadcast();
       res.json({ ok: true, widget });
     } catch (error) {
@@ -116,7 +126,25 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
       if ((patch.data?.html?.length ?? 0) > MAX_EMBED_CHARS) {
         return res.status(413).json({ error: 'A beágyazott kód túl hosszú.' });
       }
+      const before = overlayStore.find(req.params.id);
       const widget = await overlayStore.update(req.params.id, patch);
+
+      // Pozíció, méret, láthatóság, réteg — ezek a leggyakoribb változások,
+      // és utólag pont ezekre kérdez rá az ember („mikor csúszott el a logó?").
+      const changes = diffSettings(before, widget, [
+        'x', 'y', 'width', 'height', 'visible', 'opacity', 'zIndex', 'locked', 'name', 'screens',
+      ]);
+      if (changes) {
+        logger.event({
+          type: LogEvent.SETTINGS,
+          source: Source.WEB,
+          client: clientId(req),
+          message: `Widget módosítva (${widget.name}) — ${describeChanges(changes)}`,
+          area: 'widget',
+          widgetId: widget.id,
+          changes,
+        });
+      }
       broadcast();
       res.json({ ok: true, widget });
     } catch (error) {
@@ -126,7 +154,16 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
 
   admin.delete('/:id', async (req, res) => {
     try {
+      const before = overlayStore.find(req.params.id);
       await overlayStore.remove(req.params.id);
+      logger.event({
+        type: LogEvent.SETTINGS,
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Widget törölve: ${before?.name ?? req.params.id}`,
+        area: 'widget',
+        widgetId: req.params.id,
+      });
       broadcast();
       res.json({ ok: true });
     } catch (error) {
@@ -155,11 +192,23 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
     }
 
     try {
+      const before = overlayStore.find(req.params.id)?.data?.originalName;
       const widget = await overlayStore.setImage(req.params.id, {
         buffer: req.file.buffer,
         ext: check.ext,
         mime: check.mime,
         originalName: req.file.originalname,
+      });
+
+      logger.event({
+        type: LogEvent.SETTINGS,
+        level: 'ok',
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Widget kép csere (${widget.name}): ${before ?? 'nem volt'} → ${req.file.originalname}`,
+        area: 'widget',
+        widgetId: widget.id,
+        changes: { kep: { regi: before ?? null, uj: req.file.originalname } },
       });
       broadcast();
       res.json({ ok: true, widget });

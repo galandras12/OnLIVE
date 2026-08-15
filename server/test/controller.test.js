@@ -13,7 +13,7 @@ import { SessionController } from '../src/state/controller.js';
 import { Events, States } from '../src/state/machine.js';
 
 const noopLogger = {
-  info() {}, ok() {}, warn() {}, error() {}, state() {}, colors: {},
+  info() {}, ok() {}, warn() {}, error() {}, state() {}, event() {}, colors: {},
 };
 
 const memoryStore = () => ({

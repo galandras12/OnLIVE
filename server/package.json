@@ -9,12 +9,12 @@
   },
   "main": "src/index.js",
   "scripts": {
-    "start": "node --env-file=../.env src/index.js",
-    "start:noenv": "node src/index.js",
-    "dev": "node --env-file=../.env --watch src/index.js",
+    "start": "node --env-file-if-exists=../.env tools/start.js",
+    "dev": "node --env-file-if-exists=../.env --watch src/index.js",
     "test": "node --test test/*.test.js",
     "keygen": "node tools/keygen.js",
-    "hash-password": "node tools/keygen.js hash"
+    "hash-password": "node tools/keygen.js hash",
+    "start:server": "node --env-file-if-exists=../.env src/index.js"
   },
   "dependencies": {
     "express": "^4.21.2",

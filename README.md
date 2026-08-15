@@ -26,6 +26,7 @@ szerveren és a web UI-n van.
 | [`docs/ADMIN-UI.md`](docs/ADMIN-UI.md) | **8. szegmens** — admin felület, design tokenek, web→telefon parancscsatorna |
 | [`docs/MONITORING.md`](docs/MONITORING.md) | **9. szegmens** — stream-monitor, letölthető CSV napló, chat-link gyűjtő |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | **10. szegmens** — jogosultsági szintek, bejelentkezés, streamkulcs, CSRF |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **11. szegmens** — telepítés, indítás, naplózás, tesztelési terv, hibaelhárítás |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -71,6 +72,10 @@ npm test
 npm start
 ```
 
+Ezek után a napi indítás egyetlen mozdulat: **`start.bat`** a projekt
+gyökerében (tunnel-ellenőrzés → MediaMTX → vezérlő szerver, nyitva maradó
+konzollal). Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
 ## Fejlesztési állapot — szegmensek
 
 A rendszer előre rögzített, 12 szegmensből álló terv szerint épül. Minden
@@ -90,13 +95,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 8 | Web UI: admin/vezérlő felület | ✅ kész |
 | 9 | Stream-monitor, letölthető napló és link-gyűjtő | ✅ kész |
 | 10 | Biztonság és hitelesítés | ✅ kész |
-| 11 | Telepítés, üzemeltetés, tesztelési terv | ⬜ hátravan |
+| 11 | Telepítés, üzemeltetés, tesztelési terv | ✅ kész |
 
-### Ami a következő szegmensekre marad
-
-Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
-munka, hanem szándékosan későbbre ütemezett:
-
-- **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az
-  URL-ekkel, a `cloudflared` Windows service és a watchdog ütemezett feladat
-  telepítése.
+Mind a 12 szegmens elkészült. Az üzembe helyezés, a napi indítás és a
+kötelező próbák leírása: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
