@@ -270,7 +270,6 @@ OnLIVE/
 │   ├── tools/start.js         # az `npm start` indítója (függő folyamatok ellenőrzése)
 │   ├── logs/                  # YYYY-MM-DD.log — soronként egy JSON esemény
 │   └── test/                  # egységtesztek + a 4 kötelező forgatókönyv
-├── web/                       # admin UI + /live oldal (későbbi szegmens)
 └── android/                   # OnLIVE Android app (2. szegmens)
     └── app/src/main/java/com/galandras/onlive/
         ├── MainActivity.kt    # CSAK UI + engedélyek + PIP

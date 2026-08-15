@@ -94,6 +94,13 @@ számlálót, tehát a saját elgépeléseid nem halmozódnak.
 
 Enélkül a publikus admin címen egy szótáras támadás percek alatt lefutna.
 
+**A kliens IP-je csak a loopbacktől fogadható el** (`trust proxy: 'loopback'`).
+A cloudflared helyben csatlakozik, és a valódi klienst az
+`X-Forwarded-For` lánc VÉGÉRE fűzi — az express ezért a lánc utolsó, nem
+megbízható elemét veszi. Ha minden továbbítót megbíznánk (`trust proxy: true`),
+a kliens által küldött ELSŐ elem számítana: a támadó minden próbálkozáshoz más
+IP-t hazudhatna, és a zárlat sosem lépne életbe.
+
 ## 3. WHIP ingest — a streamkulcs
 
 **Ez az egyetlen védelme az ingestnek**: aki kitalálja, idegen streamet
@@ -143,6 +150,21 @@ beágyazott előnézete külön token nélkül működjön.
 | **Link-séma szűrés** | csak `http`/`https` ([`MONITORING.md`](MONITORING.md) 3.) |
 | **Hook titok** | a MediaMTX webhookjai közös titokkal ([`INGEST.md`](INGEST.md) 3.1) |
 | **MediaMTX API** | `127.0.0.1`-re kötve, kifelé sosem publikálva |
+| **URL-paraméterek** | a `/live?preview=` csak a felsorolt képernyőneveket fogadja el, a `/admin/login?next=` csak saját, abszolút útvonalat |
+| **Idegen eredetű adat a felületen** | a telefon telemetriája és a linkek `textContent`/escape-elve kerülnek a DOM-ba, nem nyers HTML-ként |
+
+### Miért kap külön sort az URL-paraméter
+
+A `?preview=` érték megjelenik az oldalon, a `?next=` pedig egy
+`location.replace()` célja. Ha bármelyik szabad szöveg lehetne, egy preparált
+link a MI originünkön futtatna kódot: bejelentkezett adminnál ez a
+munkamenet átvételét jelenti (a CSRF token a `sessionStorage`-ban van, tehát
+az oldalon futó kód eléri). Ezért mindkettő **fehérlistás**: ismeretlen érték
+esetén az alapértelmezés lép életbe, nem a kapott szöveg.
+
+Ugyanez a logika a telemetriára: az a **telefontól** jön, ami a streamkulccsal
+hitelesít — alacsonyabb szint, mint az admin felület. Ezért nem kerülhet
+HTML-ként a vezérlőfelület DOM-jába.
 
 ### A CSP kompromisszuma
 

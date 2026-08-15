@@ -51,16 +51,24 @@ export class MetricsRecorder {
     await this.ready;
     await this.#rotateIfNeeded();
 
+    // A telemetria a telefontól jön, tehát nem garantált, hogy szám van benne.
+    // Egy szöveges érték a `.toFixed()` hívásnál dobna, és a minta némán
+    // elveszne — ezért mindent számmá alakítunk, hibás értékre nullával.
+    const number = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
     const line = {
       at: new Date(now).toISOString(),
       sessionId: sessionId ?? null,
       state,
-      videoKbps: Math.round(stats.videoBitrateKbps ?? 0),
-      audioKbps: Math.round(stats.audioBitrateKbps ?? 0),
-      fps: Math.round(stats.fps ?? 0),
-      rttMs: Math.round(stats.rttMs ?? 0),
-      jitterMs: Number((stats.jitterMs ?? 0).toFixed?.(1) ?? 0),
-      lossPercent: Number((stats.packetLossPercent ?? 0).toFixed(2)),
+      videoKbps: Math.round(number(stats.videoBitrateKbps)),
+      audioKbps: Math.round(number(stats.audioBitrateKbps)),
+      fps: Math.round(number(stats.fps)),
+      rttMs: Math.round(number(stats.rttMs)),
+      jitterMs: Number(number(stats.jitterMs).toFixed(1)),
+      lossPercent: Number(number(stats.packetLossPercent).toFixed(2)),
     };
 
     try {

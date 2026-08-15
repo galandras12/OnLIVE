@@ -273,9 +273,20 @@
   }
 
   function renderStats(stats) {
+    /*
+      A telemetria a TELEFONTÓL jön (streamkulccsal hitelesítve), tehát alacsonyabb
+      jogosultsági szintről, mint ez az oldal. Ezért nem HTML-ként rakjuk be:
+      a szöveg textContent-be megy, a mértékegység külön elembe. Így egy
+      kompromittált streamkulcs sem tud kódot futtatni az admin felületén.
+    */
     const set = (id, value, unit) => {
-      document.getElementById(id).innerHTML =
-        (value ?? '–') + (unit ? `<small>${unit}</small>` : '');
+      const el = document.getElementById(id);
+      el.textContent = value ?? '–';
+      if (unit) {
+        const small = document.createElement('small');
+        small.textContent = unit;
+        el.appendChild(small);
+      }
     };
     set('mVideo', stats.videoBitrateKbps, 'kbps');
     set('mFps', stats.fps);

@@ -142,8 +142,17 @@
   const token = params.get('token') ?? '';
   const withToken = (url) => (token ? url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token) : url);
 
-  /** `?preview=<screen>`: rögzített képernyő az admin előnézethez. */
-  const previewScreen = params.get('preview');
+  /**
+   * `?preview=<screen>`: rögzített képernyő az admin előnézethez.
+   *
+   * BIZTONSÁG: kizárólag a felsorolt értékek fogadhatók el. A paraméter
+   * megjelenik az oldalon, tehát ha szabad szöveg lehetne, egy preparált
+   * `/live?preview=…` link tetszőleges kódot futtatna a mi originünkön —
+   * bejelentkezett adminnál ez a munkamenet átvételét jelentené.
+   */
+  const SCREENS = ['intro', 'live', 'interrupted', 'outro', 'blank'];
+  const requestedPreview = params.get('preview');
+  const previewScreen = SCREENS.includes(requestedPreview) ? requestedPreview : null;
   const isPreview = Boolean(previewScreen);
 
   /** `?bg=solid`: fekete háttér (önálló weblejátszóhoz). OBS-ben átlátszó kell. */
@@ -553,8 +562,11 @@
   }).catch(() => {});
 
   if (isPreview) {
-    document.body.insertAdjacentHTML('beforeend',
-      '<div class="badge" id="previewBadge">Előnézet: ' + previewScreen + '</div>');
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.id = 'previewBadge';
+    badge.textContent = 'Előnézet: ' + previewScreen;
+    document.body.appendChild(badge);
     state = { screen: previewScreen, state: previewScreen, introReason: 'start', liveElapsedMs: 0, at: Date.now(), outro: {} };
     render();
   }

@@ -155,6 +155,16 @@ test('a süti-értelmező több sütit is kezel', () => {
   assert.deepEqual(parseCookies(undefined), {});
 });
 
+test('REGRESSZIÓ: a hibásan kódolt süti nem dob kivételt', () => {
+  // A `decodeURIComponent('%')` URIError-t dob. Mivel a süti-értelmező a
+  // hitelesítő middleware-ben fut, ez MINDEN kérésre 500-at adott volna —
+  // elég lett volna egy elrontott süti a böngészőben.
+  assert.doesNotThrow(() => parseCookies('onlive_session=%'));
+  assert.doesNotThrow(() => parseCookies('onlive_session=%E0%A4'));
+  assert.equal(parseCookies('onlive_session=%').onlive_session, '%', 'a nyers érték marad');
+  assert.equal(parseCookies('a=%; b=jo').b, 'jo', 'a többi süti feldolgozása nem sérül');
+});
+
 // ---------------------------------------------------------------------------
 // Sebességkorlátozás
 // ---------------------------------------------------------------------------

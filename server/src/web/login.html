@@ -35,8 +35,16 @@
   const message = document.getElementById('message');
   const submit = document.getElementById('submit');
 
-  /** Ahová belépés után visszatérünk (pl. ha egy al-oldalról dobott ide). */
-  const next = new URLSearchParams(location.search).get('next') ?? '/admin';
+  /**
+   * Ahová belépés után visszatérünk (pl. ha egy al-oldalról dobott ide).
+   *
+   * BIZTONSÁG: csak SAJÁT, abszolút útvonal fogadható el. Enélkül egy
+   * `?next=javascript:…` link a belépett admin oldalán futtatna kódot, egy
+   * `?next=https://…` pedig idegen oldalra irányítana belépés után.
+   * A `//` kezdet is tiltott: az protokoll-relatív, tehát külső cím.
+   */
+  const requested = new URLSearchParams(location.search).get('next') ?? '';
+  const next = /^\/(?!\/)/.test(requested) ? requested : '/admin';
 
   fetch('/api/auth/me')
     .then((r) => r.json())

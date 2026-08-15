@@ -1,19 +1,19 @@
 @echo off
 rem ============================================================================
-rem  OnLIVE — indító script (11. szegmens)
+rem  OnLIVE - indito script (11. szegmens)
 rem
-rem  Dupla kattintásra elindítja a TELJES rendszert:
+rem  Dupla kattintasra elinditja a TELJES rendszert:
 rem    1. Cloudflare Tunnel service (ha nem fut)
-rem    2. MediaMTX ingest (az npm start intézi)
-rem    3. Vezérlő szerver
+rem    2. MediaMTX ingest (az npm start intezi)
+rem    3. Vezerlo szerver
 rem
-rem  Az ablak NYITVA marad, hogy a napló élőben látszódjon.
+rem  Az ablak NYITVA marad, hogy a naplo eloben latszodjon.
 rem ============================================================================
 
 setlocal enabledelayedexpansion
 title OnLIVE
 
-rem A projekt gyökeréből dolgozunk, akárhonnan indították.
+rem A projekt gyokerebol dolgozunk, akarhonnan inditottak.
 cd /d "%~dp0"
 
 set "STARTUP_LOG=%~dp0logs\startup.log"
@@ -23,7 +23,7 @@ call :log "INDITAS  ---------------------------------------------"
 
 echo.
 echo   ==========================================
-echo     OnLIVE - eloa keszules
+echo     OnLIVE - inditas
 echo   ==========================================
 echo.
 
@@ -115,5 +115,5 @@ rem ---------------------------------------------------------------------------
 rem  Idobelyeges sor a startup.log-ba - visszakereshetoen, mikor futott.
 rem ---------------------------------------------------------------------------
 :log
-echo %date% %time% ^| %~1>>"%STARTUP_LOG%"
+echo %date% %time% ^| %~1 >>"%STARTUP_LOG%"
 exit /b 0

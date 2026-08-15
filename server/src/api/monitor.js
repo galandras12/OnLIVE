@@ -71,7 +71,11 @@ export function createMonitorRoutes({ config, store, metrics, links, logger, adm
       const separator = req.query.sep === 'comma' ? 'comma' : 'semicolon';
 
       const stamp = new Date().toISOString().slice(0, 19).replaceAll(':', '-');
-      const scope = req.query.session ? `-${String(req.query.session).slice(0, 24)}` : '';
+      // A session-azonosító a fájlnévbe kerül, tehát a fejlécbe is: csak
+      // ártalmatlan karaktereket engedünk át (idézőjel, sortörés kizárva).
+      const scope = req.query.session
+        ? `-${String(req.query.session).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24)}`
+        : '';
       const fileName = `onlive-naplo${scope}-${stamp}.csv`;
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');

@@ -145,9 +145,24 @@ export class Logger {
 
   get colors() { return COLORS; }
 
-  close() {
-    this.stream?.end();
+  /**
+   * A naplófájl lezárása.
+   *
+   * A `createWriteStream` pufferel: leállításkor a még ki nem írt sorok
+   * elvesznének, ha a folyamat egyszerűen kilépne. Ezért a hívó megvárhatja a
+   * kiírást — a visszahívás a `finish` esemény után jön (vagy azonnal, ha nincs
+   * megnyitott fájl).
+   */
+  close(done) {
+    const stream = this.stream;
     this.stream = null;
+    this.streamDate = null;
+
+    if (!stream) {
+      done?.();
+      return;
+    }
+    stream.end(() => done?.());
   }
 }
 

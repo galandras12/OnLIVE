@@ -128,6 +128,12 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
     }
 
     // A régi értékeket a telefon utolsó `session/config` jelzéséből tudjuk.
+    //
+    // A felbontást KÖZÖS alakra hozzuk a naplóhoz: a parancs a telefon enum
+    // nevét viszi (`P720`), az app viszont címkével jelent vissza (`720p`).
+    // Enélkül minden állítás „1080p → P720" alakban látszana, a következő
+    // jelentés után pedig „P720 → 720p" — vagyis a naplóban változásnak
+    // tűnne az is, ami valójában ugyanaz.
     const current = commands.presence.capture ?? {};
     const changes = diffSettings(
       {
@@ -135,7 +141,7 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
         videoBitrateKbps: current.videoBitrateKbps,
         audioSampleRate: current.audio?.sampleRate, audioBitrateKbps: current.audio?.bitrateKbps,
       },
-      payload,
+      { ...payload, ...(payload.resolution ? { resolution: resolutionLabel(payload.resolution) } : {}) },
     );
     if (changes) logChange(req, 'minoseg', changes);
 
@@ -168,4 +174,9 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
 
   router.use('/api/admin/device', admin);
   return router;
+}
+
+/** `P720` → `720p` — ahogy a telefon jelenti (settings/Quality.kt). */
+function resolutionLabel(value) {
+  return String(value).replace(/^P(\d+)$/i, '$1p');
 }

@@ -171,9 +171,29 @@ export function createOverlayRoutes({ config, overlayStore, controller, logger, 
     }
   });
 
+  /** A teljes elrendezés cseréje egy lépésben (szkriptekhez, mentés/visszatöltés). */
   admin.put('/', async (req, res) => {
     try {
-      const manifest = await overlayStore.replaceAll(req.body?.widgets ?? []);
+      const incoming = req.body?.widgets ?? [];
+      if (Array.isArray(incoming) &&
+          incoming.some((widget) => (widget?.data?.html?.length ?? 0) > MAX_EMBED_CHARS)) {
+        return res.status(413).json({ error: 'A beágyazott kód túl hosszú.' });
+      }
+
+      const before = overlayStore.widgets.length;
+      const manifest = await overlayStore.replaceAll(incoming);
+
+      // Ez az egyetlen végpont, ami EGYSZERRE írja felül az összes widgetet —
+      // a naplóban ezért külön is nyoma kell legyen, nem csak az elemenkénti
+      // módosításoknak.
+      logger.event({
+        type: LogEvent.SETTINGS,
+        source: Source.WEB,
+        client: clientId(req),
+        message: `Teljes overlay-elrendezés cseréje (${before} → ${manifest.widgets.length} widget)`,
+        area: 'widget',
+        changes: { widgetek: { regi: before, uj: manifest.widgets.length } },
+      });
       broadcast();
       res.json({ ok: true, ...manifest });
     } catch (error) {

@@ -466,7 +466,7 @@
 
       document.getElementById('linkList').innerHTML = links.length
         ? links.map((link) => `<div class="link-row" data-id="${link.id}">
-            <span class="name"><a href="${link.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>
+            <span class="name"><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>
               <span class="note mono"> ${escapeHtml(shorten(link.url))}</span></span>
             <label class="note"><input type="checkbox" data-public ${link.public ? 'checked' : ''}> publikus</label>
             <button class="btn ghost" data-remove>Törlés</button>
@@ -475,7 +475,7 @@
 
       document.getElementById('linkButtons').innerHTML = links.length
         ? links.map((link) =>
-            `<a class="btn" href="${link.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>`).join('')
+            `<a class="btn" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>`).join('')
         : '<div class="empty">Nincs megnyitható link.</div>';
 
       for (const row of document.querySelectorAll('.link-row')) {

@@ -202,7 +202,9 @@ export class OverlayStore {
           ...widget,
           data: {
             ...widget.data,
-            // A kulcsot nem adjuk ki feleslegesen a szerkesztőnek sem.
+            // Külön mezőként nem adjuk ki; az `embedUrl` viszont tartalmazza,
+            // mert a szerkesztő előnézete ugyanazt a címet tölti be, mint a
+            // /live oldal. Ez rendben van: ide csak admin jut el.
             embedKey: undefined,
             url: widget.data.file ? `/overlay/asset/${widget.id}?v=${widget.data.version}` : undefined,
             embedUrl: widget.data.html

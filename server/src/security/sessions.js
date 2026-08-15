@@ -123,7 +123,17 @@ export function parseCookies(header) {
     if (index < 0) continue;
     const name = part.slice(0, index).trim();
     const value = part.slice(index + 1).trim();
-    if (name) cookies[name] = decodeURIComponent(value);
+    if (!name) continue;
+
+    // Hibás százalék-kódolás (`%`, `%E0%A4`) esetén a decodeURIComponent DOBNA.
+    // Az itt keletkező kivétel a hitelesítő middleware-ben szállna el, vagyis
+    // egy elrontott süti minden kérésre 500-at adna — ezért a nyers érték a
+    // tartalék. Az így kapott token úgysem fog egyezni semmivel.
+    try {
+      cookies[name] = decodeURIComponent(value);
+    } catch {
+      cookies[name] = value;
+    }
   }
   return cookies;
 }

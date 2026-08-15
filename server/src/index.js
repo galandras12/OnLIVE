@@ -35,6 +35,7 @@ import { RateLimiter } from './security/rate-limit.js';
 import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const startedAt = Date.now();
 
@@ -73,7 +74,17 @@ const controller = new SessionController({
 monitor.on('status', (status) => controller.updateIngest(status));
 
 const app = express();
-app.set('trust proxy', true); // a Cloudflare Tunnel mögött vagyunk
+/*
+  A Cloudflare Tunnel mögött vagyunk, de CSAK a loopbacknek hiszünk.
+
+  `true` esetén az express a teljes `X-Forwarded-For` láncot hitelesnek venné,
+  és a `req.ip` a kliens által küldött ELSŐ elem lenne — vagyis bárki
+  tetszőleges IP-t hazudhatna, és minden próbálkozáshoz friss „IP-t" választva
+  megkerülné a bejelentkezés sebességkorlátozását. A cloudflared localhostról
+  csatlakozik és ő fűzi a lánc végére a valódi klienst, ezért a loopback
+  megbízhatónak jelölése pontosan annyit enged, amennyi kell.
+*/
+app.set('trust proxy', 'loopback');
 app.use(express.json({ limit: '256kb' }));
 
 /**
@@ -137,8 +148,10 @@ app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
 
 /** A HLS tartalék lejátszó könyvtára (csak akkor tölt be, ha kell). */
 app.get('/vendor/hls.min.js', (req, res) => {
+  // fileURLToPath, nem .pathname: Windowson az utóbbi `/C:/…` alakot adna,
+  // amit a sendFile nem tud megnyitni.
   res.type('application/javascript').sendFile(
-    new URL('../node_modules/hls.js/dist/hls.min.js', import.meta.url).pathname,
+    fileURLToPath(new URL('../node_modules/hls.js/dist/hls.min.js', import.meta.url)),
   );
 });
 
@@ -214,8 +227,8 @@ httpServer.listen(config.port, () => {
 });
 
 /**
- * Indító üzenet. A 11. szegmens ezt bővíti majd (ASCII-art, teljes URL-lista
- * a `start.bat`-tal indított konzolban) — itt már most kiírjuk a lényeget.
+ * Indító üzenet: keretezett banner az elérhető URL-ekkel. Ezt látod a
+ * `start.bat` ablakában, amikor a rendszer feláll (11. szegmens).
  */
 function banner() {
   const c = logger.colors;
@@ -282,8 +295,13 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     logger.warn(`${signal} — leállás…`);
     monitor.stop();
     controller.stop();
-    httpServer.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 3000).unref();
+
+    // A naplófájl írása pufferelt: `process.exit` a még ki nem írt sorokat
+    // eldobná — pont a leállásról szólókat. Ezért előbb lezárjuk a fájlt,
+    // és csak a `finish` után lépünk ki.
+    const quit = () => logger.close(() => process.exit(0));
+    httpServer.close(quit);
+    setTimeout(quit, 3000).unref();
   });
 }
 

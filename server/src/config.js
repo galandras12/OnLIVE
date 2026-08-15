@@ -7,6 +7,17 @@
  * is elinduljon fejlesztéskor.
  */
 
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Fájlrendszeri útvonal a modul URL-jéből.
+ *
+ * NEM `new URL(...).pathname`: az Windowson `/C:/OnLIVE/...` alakot ad (vezető
+ * perjellel, ami ott érvénytelen), és a szóközöket `%20`-ra kódolja — vagyis
+ * egy „C:\Program Files\OnLIVE" telepítés alatt egyik könyvtár sem jönne létre.
+ */
+const localPath = (relative) => fileURLToPath(new URL(relative, import.meta.url));
+
 const num = (value, fallback) => {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -91,9 +102,9 @@ export const config = {
   /** Fájl-alapú tárolás. */
   // `||`, nem `??`: az üresen hagyott sor a `.env`-ben is az alapértelmezést
   // jelentse, ne kikapcsolt naplózást.
-  dataDir: process.env.ONLIVE_DATA_DIR || new URL('../data/', import.meta.url).pathname,
+  dataDir: process.env.ONLIVE_DATA_DIR || localPath('../data/'),
   /** Dátum szerint forgó esemény-napló (11. szegmens). */
-  logDir: process.env.ONLIVE_LOG_DIR || new URL('../logs/', import.meta.url).pathname,
+  logDir: process.env.ONLIVE_LOG_DIR || localPath('../logs/'),
   /** Induláskor a hiányzó függő folyamatok elindítása (npm start). */
   autostart: {
     mediamtx: bool(process.env.ONLIVE_AUTOSTART_MEDIAMTX, true),
