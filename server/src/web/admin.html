@@ -169,40 +169,9 @@
     <iframe class="frame tall" id="obsFrame" data-src="/admin/obs"></iframe>
   </section>
 
-  <!-- ================= MONITOR ÉS LINKEK ================= -->
+  <!-- ================= MONITOR ÉS LINKEK (9. szegmens) ================= -->
   <section class="panel" id="panel-monitor">
-    <div class="grid cols-2">
-
-      <div class="card">
-        <h2>Stream-monitor</h2>
-        <p class="hint">Az ingest réteg és a telefon állapota egy helyen.</p>
-        <table>
-          <tr><th>Ingest elérhető</th><td id="monAvailable">–</td></tr>
-          <tr><th>Bejövő adat</th><td id="monFlowing">–</td></tr>
-          <tr><th>Sávok</th><td id="monTracks">–</td></tr>
-          <tr><th>Olvasók</th><td class="num" id="monReaders">–</td></tr>
-          <tr><th>Telefon</th><td id="monDevice">–</td></tr>
-          <tr><th>Capture</th><td id="monCapture">–</td></tr>
-          <tr><th>Szerver-állapot</th><td id="monState">–</td></tr>
-        </table>
-        <p class="note" style="margin-top:.7rem">
-          A részletes stream-monitor és a letölthető napló a 9. szegmensben
-          bővül — az átmenet-napló alatta már gyűlik.
-        </p>
-      </div>
-
-      <div class="card">
-        <h2>Linkek</h2>
-        <p class="hint">Kattints a másoláshoz.</p>
-        <table id="linkTable"></table>
-      </div>
-
-      <div class="card" style="grid-column: 1 / -1">
-        <h2>Állapot-előzmény</h2>
-        <p class="hint">A legutóbbi átmenetek, forrással együtt.</p>
-        <div class="log"><table id="logTable"></table></div>
-      </div>
-    </div>
+    <iframe class="frame tall" id="monitorFrame" data-src="/admin/monitor"></iframe>
   </section>
 
 </main>
@@ -257,7 +226,7 @@
       }
       const frame = document.querySelector('#panel-' + tab.dataset.panel + ' iframe[data-src]');
       if (frame && !frame.src) frame.src = frame.dataset.src;
-      if (tab.dataset.panel === 'monitor') loadTransitions();
+
     });
   }
 
@@ -302,7 +271,6 @@
     document.getElementById('btnStop').disabled = !running;
 
     if (next.stats) renderStats(next.stats);
-    if (next.ingest) renderIngest(next.ingest, next.state);
     if (next.capture) renderCapture(next.capture);
   }
 
@@ -317,17 +285,6 @@
     set('mLoss', (stats.packetLossPercent ?? 0).toFixed(1), '%');
     const seconds = stats.uptimeSeconds ?? 0;
     set('mUptime', String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0'));
-  }
-
-  function renderIngest(ingest, state) {
-    document.getElementById('monAvailable').innerHTML = ingest.available
-      ? '<span class="ok-text">igen</span>' : '<span class="err">nem — nem fut a MediaMTX</span>';
-    document.getElementById('monFlowing').innerHTML = ingest.flowing
-      ? '<span class="ok-text">érkezik</span>'
-      : (ingest.stalled ? '<span class="err">megállt (a publisher csatlakozva van)</span>' : 'nincs');
-    document.getElementById('monTracks').textContent = (ingest.tracks ?? []).join(', ') || '–';
-    document.getElementById('monReaders').textContent = ingest.readers ?? 0;
-    document.getElementById('monState').textContent = state;
   }
 
   function renderCapture(capture) {
@@ -431,45 +388,6 @@
     } catch { /* offline admin — a következő körben újra */ }
   }
 
-  function renderLinks() {
-    const origin = location.origin;
-    const live = origin.replace('//admin.', '//live.');
-    const rows = [
-      ['Live / OBS Browser Source', live + '/live'],
-      ['Live (böngészőben, fekete háttér)', live + '/live?bg=solid'],
-      ['Live diagnosztikával', live + '/live?debug=1&bg=solid'],
-      ['Admin felület', origin + '/admin'],
-      ['Health-check', origin + '/healthz'],
-    ];
-    document.getElementById('linkTable').innerHTML = rows.map(([name, url]) =>
-      `<tr><th>${name}</th><td><a class="mono" href="${url}" target="_blank" data-copy="${url}">${url}</a></td></tr>`,
-    ).join('');
-
-    for (const link of document.querySelectorAll('#linkTable a')) {
-      link.addEventListener('click', async (event) => {
-        event.preventDefault();
-        try { await navigator.clipboard.writeText(link.dataset.copy); toast('Másolva'); }
-        catch { window.open(link.dataset.copy, '_blank'); }
-      });
-    }
-  }
-
-  async function loadTransitions() {
-    try {
-      const response = await fetch('/api/admin/transitions?limit=60', { headers: headers() });
-      if (!response.ok) return;
-      const rows = (await response.json()).reverse();
-      document.getElementById('logTable').innerHTML = rows.length
-        ? rows.map((row) => `<tr>
-            <td class="when">${new Date(row.at).toLocaleTimeString('hu-HU')}</td>
-            <td>${row.from} <span class="arrow">→</span> <b>${row.to}</b></td>
-            <td class="note">${row.event}</td>
-            <td class="note">${row.source}</td>
-          </tr>`).join('')
-        : '<tr><td class="empty">Még nincs átmenet.</td></tr>';
-    } catch { /* ignoráljuk */ }
-  }
-
   // =========================================================================
   //  Indulás
   // =========================================================================
@@ -484,13 +402,8 @@
   const socket = io({ query: { role: 'admin' } });
   socket.on('onlive:state', renderState);
   socket.on('onlive:stats', renderStats);
-  socket.on('onlive:ingest', (ingest) => renderIngest(ingest, snapshot?.state ?? '–'));
-  socket.on('onlive:transition', () => {
-    if (document.getElementById('panel-monitor').classList.contains('active')) loadTransitions();
-  });
   socket.on('disconnect', () => toast('Megszakadt a kapcsolat a szerverrel', true));
 
-  renderLinks();
   loadDevice();
   setInterval(loadDevice, 4000);
   setInterval(() => { if (snapshot) renderState(snapshot); }, 1000);

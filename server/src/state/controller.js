@@ -23,11 +23,13 @@ export class SessionController extends EventEmitter {
    * @param {{closePublisher: () => Promise<object>}} [deps.ingestControl]
    *   az `ended` állapotban a publisher lekapcsolásához.
    */
-  constructor({ config, store, logger, outroDurationMs, ingestControl }) {
+  constructor({ config, store, logger, outroDurationMs, ingestControl, metrics }) {
     super();
     this.config = config;
     this.store = store;
     this.logger = logger;
+    /** Metrika-rögzítő a letölthető naplóhoz (9. szegmens). */
+    this.metrics = metrics ?? null;
     this.outroDurationMs = outroDurationMs ?? (() => config.machine.outroDurationMs);
     this.ingestControl = ingestControl ?? null;
 
@@ -209,6 +211,16 @@ export class SessionController extends EventEmitter {
 
   updateStats(stats) {
     this.stats = { ...stats, receivedAt: Date.now() };
+
+    // A napló a MÉRÉS pillanatában érvényes állapottal együtt őrzi a mintát —
+    // enélkül utólag nem lehetne megmondani, hogy egy bitráta-esés élő adás
+    // közben vagy már a megszakadás alatt történt.
+    this.metrics?.record({
+      state: this.machine.state,
+      sessionId: this.machine.context.sessionId,
+      stats,
+    });
+
     this.emit('change', this.snapshot(), null);
   }
 

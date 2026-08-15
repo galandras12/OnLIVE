@@ -264,6 +264,7 @@ class RtcEngine(
         var audioBytes = 0L
         var fps = 0
         var rttMs = 0
+        var jitterMs = 0.0
         var packetsSent = 0L
         var packetsLost = 0L
 
@@ -285,6 +286,9 @@ class RtcEngine(
                     packetsLost += (stat.members["packetsLost"] as? Number)?.toLong() ?: 0L
                     val rtt = (stat.members["roundTripTime"] as? Number)?.toDouble()
                     if (rtt != null && rtt > 0) rttMs = (rtt * 1000).toInt()
+                    // A jitter másodpercben érkezik; ezredmásodpercre váltjuk.
+                    val jitter = (stat.members["jitter"] as? Number)?.toDouble()
+                    if (jitter != null && jitter > jitterMs / 1000.0) jitterMs = jitter * 1000
                 }
 
                 "candidate-pair" -> {
@@ -311,6 +315,7 @@ class RtcEngine(
             audioBitrateKbps = audioKbps.coerceAtLeast(0),
             fps = fps,
             rttMs = rttMs,
+            jitterMs = jitterMs,
             packetLossPercent = if (packetsSent > 0) packetsLost * 100.0 / packetsSent else 0.0,
             uptimeSeconds = if (publishStartedAt == 0L) 0 else (now - publishStartedAt) / 1000,
         )

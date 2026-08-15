@@ -24,6 +24,7 @@ szerveren és a web UI-n van.
 | [`docs/OBS.md`](docs/OBS.md) | **6. szegmens** — Browser Source beállítás, átlátszó vászon, WHEP/HLS lejátszás |
 | [`docs/WIDGETS.md`](docs/WIDGETS.md) | **7. szegmens** — widgetek, drag-and-drop szerkesztő, sandboxolt beágyazások |
 | [`docs/ADMIN-UI.md`](docs/ADMIN-UI.md) | **8. szegmens** — admin felület, design tokenek, web→telefon parancscsatorna |
+| [`docs/MONITORING.md`](docs/MONITORING.md) | **9. szegmens** — stream-monitor, letölthető CSV napló, chat-link gyűjtő |
 | [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
 | [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
 
@@ -39,6 +40,7 @@ szerveren és a web UI-n van.
 ```
 Admin UI     : https://admin.galandras.com/admin    (fülek: vezérlés, overlay, média, OBS, monitor)
 Live / OBS   : https://live.galandras.com/live      (Browser Source, 1920x1080)
+Chat-linkek  : https://live.galandras.com/links     (mobilra, egy koppintás)
 WHIP ingest  : https://ingest.galandras.com/<stream>/whip
 ```
 
@@ -83,7 +85,7 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 | 6 | OBS integráció (Browser Source) | ✅ kész |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | ✅ kész |
-| 9 | Stream-monitor, letölthető napló és link-gyűjtő | ⬜ hátravan |
+| 9 | Stream-monitor, letölthető napló és link-gyűjtő | ✅ kész |
 | 10 | Biztonság és hitelesítés | ⬜ hátravan |
 | 11 | Telepítés, üzemeltetés, tesztelési terv | ⬜ hátravan |
 
@@ -92,9 +94,6 @@ csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 Ezekre a kész szegmensek dokumentációja már hivatkozik, tehát nem elfelejtett
 munka, hanem szándékosan későbbre ütemezett:
 
-- **9.** Részletes stream-monitor és **letölthető napló** — az admin felületen
-  a fül és a link-gyűjtő már megvan, az átmenet-napló pedig gyűlik
-  (`data/transitions.jsonl`).
 - **10.** Az admin jelszó, az ingest streamkulcs és a subdomainek jogosultsági
   szintjei — a `admin` / `live` / `ingest` felosztás már ehhez igazodik.
 - **11.** `start.bat`, keretezett „OnLIVE szerver elindult" konzol üzenet az

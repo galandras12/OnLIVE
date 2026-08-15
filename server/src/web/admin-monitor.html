@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · Monitor</title>
+<link rel="stylesheet" href="/admin.css">
+<style>
+  main { padding: 1.1rem; display: grid; gap: var(--gap); }
+  .split { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: var(--gap); align-items: start; }
+  @media (max-width: 880px) { .split { grid-template-columns: 1fr; } }
+
+  /* A NYERS bejövő kép — nem a /live kompozit. */
+  .raw {
+    width: 100%; aspect-ratio: 16/9; background: #05070a;
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    object-fit: contain; display: block;
+  }
+  .raw-note { display: flex; justify-content: space-between; align-items: center; margin-top: .4rem; }
+
+  canvas#chart { width: 100%; height: 220px; display: block; }
+  .legend { display: flex; gap: 1rem; font-size: .75rem; color: var(--muted); margin-top: .4rem; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+
+  .link-row { display: flex; gap: .5rem; align-items: center; padding: .35rem 0; border-bottom: 1px solid var(--border-soft); }
+  .link-row .name { flex: 1; }
+  .link-row a { color: var(--text); text-decoration: none; }
+  .link-row a:hover { color: var(--accent); }
+  .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; align-items: end; }
+</style>
+</head>
+<body>
+
+<main>
+
+  <!-- ================= ÉLŐ MONITOR ================= -->
+  <div class="split">
+
+    <div class="card">
+      <h2>Nyers bejövő kép</h2>
+      <p class="hint">
+        Ez <strong>nem</strong> a <code>/live</code> kompozit: közvetlenül a
+        telefontól érkező stream, overlay és intro/outro nélkül. Csak
+        diagnosztikára — sosem ez megy adásba.
+      </p>
+      <video class="raw" id="rawVideo" playsinline autoplay muted></video>
+      <div class="raw-note">
+        <span class="note" id="rawStatus">lejátszó áll</span>
+        <button class="btn ghost" id="rawToggle">Indítás</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Pillanatnyi értékek</h2>
+        <div class="metrics">
+          <div class="metric"><div class="k">Videó</div><div class="v" id="mVideo">–<small>kbps</small></div></div>
+          <div class="metric"><div class="k">Hang</div><div class="v" id="mAudio">–<small>kbps</small></div></div>
+          <div class="metric"><div class="k">Felbontás</div><div class="v" id="mRes">–</div></div>
+          <div class="metric"><div class="k">FPS</div><div class="v" id="mFps">–</div></div>
+          <div class="metric"><div class="k">RTT</div><div class="v" id="mRtt">–<small>ms</small></div></div>
+          <div class="metric"><div class="k">Jitter</div><div class="v" id="mJitter">–<small>ms</small></div></div>
+          <div class="metric"><div class="k">Vesztés</div><div class="v" id="mLoss">–<small>%</small></div></div>
+          <div class="metric"><div class="k">Adásidő</div><div class="v" id="mUptime">–</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Ingest</h2>
+        <table>
+          <tr><th>MediaMTX</th><td id="mtxAvail">–</td></tr>
+          <tr><th>Bejövő adat</th><td id="mtxFlow">–</td></tr>
+          <tr><th>Sávok</th><td id="mtxTracks">–</td></tr>
+          <tr><th>Olvasók</th><td class="num" id="mtxReaders">–</td></tr>
+          <tr><th>Szerver-állapot</th><td id="srvState">–</td></tr>
+          <tr><th>Telefon</th><td id="devInfo">–</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NAPLÓ ================= -->
+  <div class="card">
+    <h2>Napló</h2>
+    <p class="hint">
+      Az állapotgép minden átmenete és a hozzá tartozó bitráta-adatok.
+      A CSV Excelben és Google Sheetsben is közvetlenül megnyitható.
+    </p>
+
+    <div class="filters">
+      <div>
+        <label class="note">Session</label>
+        <select id="sessionFilter"><option value="">összes</option></select>
+      </div>
+      <div>
+        <label class="note">Ettől</label>
+        <input type="datetime-local" id="fromFilter">
+      </div>
+      <div>
+        <label class="note">Eddig</label>
+        <input type="datetime-local" id="toFilter">
+      </div>
+      <div>
+        <label class="note">CSV elválasztó</label>
+        <select id="sepFilter">
+          <option value="semicolon">pontosvessző (Excel)</option>
+          <option value="comma">vessző (Google Sheets)</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="refresh">Frissítés</button>
+        <button class="btn" id="download">Napló letöltése</button>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem">
+      <canvas id="chart"></canvas>
+      <div class="legend">
+        <span><i style="background:#22d3ee"></i>videó bitráta</span>
+        <span><i style="background:rgba(225,29,72,.35)"></i>megszakadás</span>
+        <span><i style="background:rgba(245,158,11,.28)"></i>szünet</span>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem" id="summary"></div>
+
+    <div class="log" style="margin-top:.75rem">
+      <table id="periodTable"></table>
+    </div>
+  </div>
+
+  <!-- ================= LINKEK ================= -->
+  <div class="split">
+    <div class="card">
+      <h2>Chat-linkek</h2>
+      <p class="hint">
+        Elnevezett linkek, amiket egy gombnyomással meg lehet nyitni új fülön.
+        Ez <strong>nem</strong> beágyazás — nem fut third-party kód, csak
+        megnyit egy címet. A nyilvános lista: <a href="/links" target="_blank">/links</a>
+      </p>
+      <div id="linkList"></div>
+      <div class="row" style="margin-top:.75rem">
+        <input type="text" id="linkName" placeholder="Név (pl. YouTube chat)" style="flex:1;min-width:9rem">
+        <input type="text" id="linkUrl" placeholder="https://…" style="flex:2;min-width:12rem">
+        <button class="btn" id="addLink">Hozzáadás</button>
+      </div>
+      <div class="note" id="linkError" style="margin-top:.4rem"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gyors megnyitás</h2>
+      <p class="hint">Ugyanezek a gombok jelennek meg a nyilvános oldalon is.</p>
+      <div class="row" id="linkButtons"></div>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const password = {
+    get: () => localStorage.getItem('onlive.admin') ?? '',
+  };
+  const headers = () => ({ 'X-OnLIVE-Admin-Password': password.get(), 'Content-Type': 'application/json' });
+
+  const toastEl = document.getElementById('toast');
+  let toastTimer;
+  function toast(message, isError) {
+    toastEl.textContent = message;
+    toastEl.classList.toggle('err', Boolean(isError));
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+
+  // =========================================================================
+  //  Nyers előnézet — közvetlenül a WHEP proxyról, overlay nélkül
+  // =========================================================================
+
+  const rawVideo = document.getElementById('rawVideo');
+  const rawStatus = document.getElementById('rawStatus');
+  const rawToggle = document.getElementById('rawToggle');
+  let pc = null;
+  let sessionUrl = null;
+
+  async function startRaw() {
+    stopRaw();
+    rawStatus.textContent = 'kapcsolódás…';
+
+    try {
+      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }] });
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
+      const stream = new MediaStream();
+      pc.ontrack = (event) => {
+        stream.addTrack(event.track);
+        rawVideo.srcObject = stream;
+        rawVideo.play().catch(() => {});
+      };
+      pc.onconnectionstatechange = () => {
+        if (!pc) return;
+        rawStatus.textContent = 'WebRTC: ' + pc.connectionState;
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await new Promise((resolve) => {
+        if (pc.iceGatheringState === 'complete') return resolve();
+        const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); resolve(); } };
+        pc.addEventListener('icegatheringstatechange', check);
+        setTimeout(resolve, 3000);
+      });
+
+      const response = await fetch('/api/whep/' + encodeURIComponent(window.ONLIVE_STREAM_PATH ?? 'onlive'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/sdp', 'X-OnLIVE-Admin-Password': password.get() },
+        body: pc.localDescription.sdp,
+      });
+      if (!response.ok) throw new Error('WHEP HTTP ' + response.status);
+
+      sessionUrl = response.headers.get('Location');
+      await pc.setRemoteDescription({ type: 'answer', sdp: await response.text() });
+      rawToggle.textContent = 'Leállítás';
+    } catch (error) {
+      rawStatus.textContent = 'hiba: ' + error.message;
+      stopRaw();
+    }
+  }
+
+  function stopRaw() {
+    if (sessionUrl) { fetch(sessionUrl, { method: 'DELETE', keepalive: true }).catch(() => {}); sessionUrl = null; }
+    if (pc) { try { pc.close(); } catch {} pc = null; }
+    rawVideo.srcObject = null;
+    rawToggle.textContent = 'Indítás';
+    if (!rawStatus.textContent.startsWith('hiba')) rawStatus.textContent = 'lejátszó áll';
+  }
+
+  rawToggle.addEventListener('click', () => (pc ? stopRaw() : startRaw()));
+  window.addEventListener('beforeunload', stopRaw);
+
+  // =========================================================================
+  //  Élő értékek
+  // =========================================================================
+
+  let lastCapture = null;
+
+  function setMetric(id, value, unit) {
+    document.getElementById(id).innerHTML = (value ?? '–') + (unit ? `<small>${unit}</small>` : '');
+  }
+
+  function renderStats(stats) {
+    setMetric('mVideo', stats.videoBitrateKbps, 'kbps');
+    setMetric('mAudio', stats.audioBitrateKbps, 'kbps');
+    setMetric('mFps', stats.fps);
+    setMetric('mRtt', stats.rttMs, 'ms');
+    setMetric('mJitter', stats.jitterMs ?? '–', 'ms');
+    setMetric('mLoss', (stats.packetLossPercent ?? 0).toFixed(1), '%');
+    const seconds = stats.uptimeSeconds ?? 0;
+    setMetric('mUptime', String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0'));
+  }
+
+  function renderState(snapshot) {
+    document.getElementById('srvState').textContent = snapshot.state;
+    if (snapshot.stats) renderStats(snapshot.stats);
+    if (snapshot.capture) {
+      lastCapture = snapshot.capture;
+      setMetric('mRes', snapshot.capture.resolution ?? '–');
+    }
+    if (snapshot.ingest) {
+      document.getElementById('mtxAvail').innerHTML = snapshot.ingest.available
+        ? '<span class="ok-text">elérhető</span>' : '<span class="err">nem elérhető</span>';
+      document.getElementById('mtxFlow').innerHTML = snapshot.ingest.flowing
+        ? '<span class="ok-text">érkezik</span>'
+        : (snapshot.ingest.stalled ? '<span class="err">megállt</span>' : 'nincs');
+      document.getElementById('mtxTracks').textContent = (snapshot.ingest.tracks ?? []).join(', ') || '–';
+      document.getElementById('mtxReaders').textContent = snapshot.ingest.readers ?? 0;
+    }
+  }
+
+  async function loadDevice() {
+    try {
+      const response = await fetch('/api/admin/device', { headers: headers() });
+      if (!response.ok) return;
+      const status = await response.json();
+      document.getElementById('devInfo').textContent = status.online
+        ? `${status.device ?? 'ismeretlen'} · kapcsolódva`
+        : `${status.device ?? 'nincs adat'} · nem jelentkezik`;
+    } catch { /* csend */ }
+  }
+
+  // =========================================================================
+  //  Napló: lekérés, grafikon, táblázat
+  // =========================================================================
+
+  const chart = document.getElementById('chart');
+
+  function query() {
+    const params = new URLSearchParams();
+    const session = document.getElementById('sessionFilter').value;
+    const from = document.getElementById('fromFilter').value;
+    const to = document.getElementById('toFilter').value;
+    if (session) params.set('session', session);
+    if (from) params.set('from', new Date(from).toISOString());
+    if (to) params.set('to', new Date(to).toISOString());
+    return params;
+  }
+
+  async function loadReport() {
+    try {
+      const response = await fetch('/api/admin/report?' + query(), { headers: headers() });
+      if (!response.ok) return toast('A napló betöltése nem sikerült', true);
+      const report = await response.json();
+
+      renderSessions(report.sessions);
+      renderPeriods(report.periods);
+      drawChart(report.chart);
+    } catch (error) {
+      toast(error.message, true);
+    }
+  }
+
+  function renderSessions(sessions) {
+    const select = document.getElementById('sessionFilter');
+    const current = select.value;
+    const options = sessions.filter((s) => s.sessionId).map((s) =>
+      `<option value="${s.sessionId}">${s.sessionId} · ${new Date(s.start).toLocaleString('hu-HU')}</option>`);
+    select.innerHTML = '<option value="">összes</option>' + options.join('');
+    select.value = current;
+
+    document.getElementById('summary').innerHTML = sessions.length
+      ? '<table><tr><th>Session</th><th>Élő idő</th><th>Kiesés</th><th>Megszakadások</th><th>Átlag</th><th>Csúcs</th></tr>' +
+        sessions.map((s) => `<tr>
+          <td>${s.sessionId ?? '–'}</td>
+          <td class="num">${formatDuration(s.liveSeconds)}</td>
+          <td class="num">${formatDuration(s.outageSeconds)}</td>
+          <td class="num">${s.outages}</td>
+          <td class="num">${s.avgKbps} kbps</td>
+          <td class="num">${s.maxKbps} kbps</td>
+        </tr>`).join('') + '</table>'
+      : '<div class="empty">Ebben a tartományban nincs adat.</div>';
+  }
+
+  function formatDuration(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function renderPeriods(periods) {
+    document.getElementById('periodTable').innerHTML = periods.length
+      ? '<tr><th>Kezdet</th><th>Állapot</th><th>Hossz</th><th>Átlag</th><th>Min</th><th>Max</th><th>FPS</th><th>Vesztés</th></tr>' +
+        [...periods].reverse().map((p) => `<tr>
+          <td class="when">${new Date(p.start).toLocaleString('hu-HU')}</td>
+          <td>${p.outage ? '<span class="err">' + p.state + '</span>' : p.state}</td>
+          <td class="num">${formatDuration(p.durationSeconds)}</td>
+          <td class="num">${p.avgKbps || '–'}</td>
+          <td class="num">${p.minKbps || '–'}</td>
+          <td class="num">${p.maxKbps || '–'}</td>
+          <td class="num">${p.avgFps || '–'}</td>
+          <td class="num">${p.maxLossPercent || 0}%</td>
+        </tr>`).join('')
+      : '<tr><td class="empty">Nincs időszak.</td></tr>';
+  }
+
+  /** Egyszerű vonalgrafikon — külső könyvtár nélkül. */
+  function drawChart({ points, outages }) {
+    const dpr = window.devicePixelRatio || 1;
+    const width = chart.clientWidth;
+    const height = 220;
+    chart.width = width * dpr;
+    chart.height = height * dpr;
+
+    const ctx = chart.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    if (!points.length) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '13px system-ui';
+      ctx.fillText('Nincs mérési adat ebben a tartományban.', 12, height / 2);
+      return;
+    }
+
+    const t0 = points[0].t;
+    const t1 = points[points.length - 1].t || t0 + 1;
+    const maxKbps = Math.max(1000, ...points.map((p) => p.kbps)) * 1.15;
+    const x = (t) => ((t - t0) / Math.max(1, t1 - t0)) * (width - 44) + 40;
+    const y = (kbps) => height - 22 - (kbps / maxKbps) * (height - 40);
+
+    // Kiesés-sávok: piros a megszakadás, borostyán a szándékos szünet.
+    for (const outage of outages) {
+      const from = Math.max(t0, outage.from);
+      const to = Math.min(t1, outage.to);
+      if (to <= from) continue;
+      ctx.fillStyle = outage.state === 'paused' ? 'rgba(245,158,11,.28)' : 'rgba(225,29,72,.35)';
+      ctx.fillRect(x(from), 8, Math.max(2, x(to) - x(from)), height - 30);
+    }
+
+    // Rács és tengelyfeliratok
+    ctx.strokeStyle = '#1f2937';
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '11px system-ui';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 3; i += 1) {
+      const value = (maxKbps / 3) * i;
+      const yy = y(value);
+      ctx.beginPath(); ctx.moveTo(40, yy); ctx.lineTo(width - 4, yy); ctx.stroke();
+      ctx.fillText(Math.round(value) + '', 4, yy + 3);
+    }
+
+    // Bitráta-vonal
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const px = x(point.t);
+      const py = y(point.kbps);
+      if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#6b7280';
+    ctx.fillText(new Date(t0).toLocaleTimeString('hu-HU'), 40, height - 6);
+    const endLabel = new Date(t1).toLocaleTimeString('hu-HU');
+    ctx.fillText(endLabel, width - 8 - ctx.measureText(endLabel).width, height - 6);
+  }
+
+  document.getElementById('refresh').addEventListener('click', loadReport);
+  document.getElementById('sessionFilter').addEventListener('change', loadReport);
+
+  document.getElementById('download').addEventListener('click', async () => {
+    const params = query();
+    params.set('sep', document.getElementById('sepFilter').value);
+    try {
+      // Fejléces hitelesítés kell, ezért nem sima <a href> — blobként töltjük le.
+      const response = await fetch('/api/admin/report.csv?' + params, { headers: headers() });
+      if (!response.ok) return toast('A letöltés nem sikerült', true);
+
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'onlive-naplo.csv';
+      const url = URL.createObjectURL(await response.blob());
+
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = name;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast('Napló letöltve');
+    } catch (error) {
+      toast(error.message, true);
+    }
+  });
+
+  // =========================================================================
+  //  Chat-linkek
+  // =========================================================================
+
+  async function loadLinks() {
+    try {
+      const response = await fetch('/api/admin/links', { headers: headers() });
+      if (!response.ok) return;
+      const { links } = await response.json();
+
+      document.getElementById('linkList').innerHTML = links.length
+        ? links.map((link) => `<div class="link-row" data-id="${link.id}">
+            <span class="name"><a href="${link.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>
+              <span class="note mono"> ${escapeHtml(shorten(link.url))}</span></span>
+            <label class="note"><input type="checkbox" data-public ${link.public ? 'checked' : ''}> publikus</label>
+            <button class="btn ghost" data-remove>Törlés</button>
+          </div>`).join('')
+        : '<div class="empty">Még nincs link.</div>';
+
+      document.getElementById('linkButtons').innerHTML = links.length
+        ? links.map((link) =>
+            `<a class="btn" href="${link.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(link.name)}</a>`).join('')
+        : '<div class="empty">Nincs megnyitható link.</div>';
+
+      for (const row of document.querySelectorAll('.link-row')) {
+        row.querySelector('[data-remove]').addEventListener('click', async () => {
+          await fetch('/api/admin/links/' + row.dataset.id, { method: 'DELETE', headers: headers() });
+          loadLinks();
+        });
+        row.querySelector('[data-public]').addEventListener('change', async (event) => {
+          await fetch('/api/admin/links/' + row.dataset.id, {
+            method: 'PATCH', headers: headers(),
+            body: JSON.stringify({ public: event.target.checked }),
+          });
+          loadLinks();
+        });
+      }
+    } catch { /* csend */ }
+  }
+
+  document.getElementById('addLink').addEventListener('click', async () => {
+    const name = document.getElementById('linkName').value.trim();
+    const url = document.getElementById('linkUrl').value.trim();
+    const error = document.getElementById('linkError');
+    error.textContent = '';
+
+    const response = await fetch('/api/admin/links', {
+      method: 'POST', headers: headers(), body: JSON.stringify({ name, url }),
+    });
+    const body = await response.json();
+    if (!response.ok) { error.innerHTML = '<span class="err">' + body.error + '</span>'; return; }
+
+    document.getElementById('linkName').value = '';
+    document.getElementById('linkUrl').value = '';
+    loadLinks();
+    toast('Link hozzáadva');
+  });
+
+  const escapeHtml = (text) => String(text).replace(/[<>&"]/g, (c) =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+  const shorten = (url) => (url.length > 42 ? url.slice(0, 40) + '…' : url);
+
+  // =========================================================================
+  //  Indulás
+  // =========================================================================
+
+  const socket = io({ query: { role: 'admin' } });
+  socket.on('onlive:state', renderState);
+  socket.on('onlive:stats', renderStats);
+  socket.on('onlive:transition', loadReport);
+
+  loadReport();
+  loadLinks();
+  loadDevice();
+  setInterval(loadDevice, 5000);
+  window.addEventListener('resize', () => loadReport());
+})();
+</script>
+</body>
+</html>

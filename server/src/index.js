@@ -20,11 +20,14 @@ import { IngestControl } from './ingest/control.js';
 import { MediaStore } from './media/store.js';
 import { OverlayStore } from './overlay/store.js';
 import { DeviceCommandQueue } from './device/commands.js';
+import { MetricsRecorder } from './log/metrics.js';
+import { LinkStore } from './links/store.js';
 import { createRoutes } from './api/routes.js';
 import { createMediaRoutes } from './api/media.js';
 import { createOverlayRoutes } from './api/overlay.js';
 import { createStreamProxyRoutes } from './api/stream-proxy.js';
 import { createDeviceRoutes } from './api/device.js';
+import { createMonitorRoutes } from './api/monitor.js';
 import { liveAuth as liveAuthFactory } from './api/auth.js';
 import { attachSocket } from './realtime/socket.js';
 import { readFileSync } from 'node:fs';
@@ -36,6 +39,9 @@ const mediaStore = new MediaStore({ dataDir: config.dataDir, logger });
 const overlayStore = new OverlayStore({ dataDir: config.dataDir, logger });
 /** A web UI → telefon parancscsatorna (8. szegmens). */
 const commands = new DeviceCommandQueue({ logger });
+/** Metrika-napló és chat-linkek (9. szegmens). */
+const metrics = new MetricsRecorder({ dataDir: config.dataDir, logger });
+const links = new LinkStore({ dataDir: config.dataDir, logger });
 const monitor = new IngestMonitor({ config, logger });
 const ingestControl = new IngestControl({ config, logger });
 
@@ -48,6 +54,7 @@ const controller = new SessionController({
   outroDurationMs: () => mediaStore.outroDurationMs(),
   // `ended` állapotban a publisher-kapcsolat aktív bontása.
   ingestControl,
+  metrics,
 });
 
 monitor.on('status', (status) => controller.updateIngest(status));
@@ -79,6 +86,7 @@ const liveAuth = liveAuthFactory(config);
 
 app.use(createRoutes({ config, controller, monitor, store, commands, logger, startedAt }));
 app.use(createDeviceRoutes({ config, controller, commands, logger }));
+app.use(createMonitorRoutes({ config, store, metrics, links, logger }));
 app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth }));
 app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth }));
 app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
@@ -122,6 +130,22 @@ app.get('/admin', (req, res) => res.type('html').send(page('admin.html')));
 app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
 app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
+app.get('/admin/monitor', (req, res) => res.type('html').send(
+  page('admin-monitor.html').replace(
+    '<script src="/socket.io/socket.io.js"></script>',
+    `<script>window.ONLIVE_STREAM_PATH=${JSON.stringify(config.ingest.path)};</script>\n` +
+      '<script src="/socket.io/socket.io.js"></script>',
+  ),
+));
+
+/**
+ * Nyilvános link-oldal (9. szegmens).
+ *
+ * Külön oldal, NEM a `/live` — az a kompozit render-felület, ahol nincs
+ * interakció (nincs kurzor, nincs kattintható elem). A linkeket a telefonon
+ * nyitod meg, ez az oldal arra készült.
+ */
+app.get('/links', (req, res) => res.type('html').send(page('links.html')));
 
 app.get('/', (req, res) => {
   res.type('html').send(
@@ -130,6 +154,7 @@ app.get('/', (req, res) => {
       `<h1>OnLIVE</h1><p>A vezérlő szerver fut.</p>` +
       `<ul><li><a style="color:#f43f5e" href="/admin">/admin</a> — vezérlőfelület</li>` +
       `<li><a style="color:#f43f5e" href="/live">/live</a> — kompozit lejátszó (OBS Browser Source)</li>` +
+      `<li><a style="color:#f43f5e" href="/links">/links</a> — chat-linkek (mobilra)</li>` +
       `<li><a style="color:#f43f5e" href="/healthz">/healthz</a> — állapot</li></ul></body>`,
   );
 });

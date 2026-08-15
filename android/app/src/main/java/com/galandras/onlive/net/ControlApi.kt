@@ -76,6 +76,7 @@ class ControlApi(
                 .put("audioBitrateKbps", stats.audioBitrateKbps)
                 .put("fps", stats.fps)
                 .put("rttMs", stats.rttMs)
+                .put("jitterMs", stats.jitterMs)
                 .put("packetLossPercent", stats.packetLossPercent)
                 .put("uptimeSeconds", stats.uptimeSeconds),
         )

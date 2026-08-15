@@ -44,6 +44,8 @@ data class StreamStats(
     val audioBitrateKbps: Int = 0,
     val fps: Int = 0,
     val rttMs: Int = 0,
+    /** Hálózati ingadozás — a 9. szegmens monitor-panelje ezt is mutatja. */
+    val jitterMs: Double = 0.0,
     val packetLossPercent: Double = 0.0,
     val uptimeSeconds: Long = 0,
 )

@@ -139,7 +139,11 @@ megszakadt" megkülönböztetés): **[`docs/INGEST.md`](docs/INGEST.md)**
   `/live` oldal) valós időben megkapja az aktuális állapotot.
 - **Hitelesítés és jogosultság:** admin jelszó, ingest streamkulcs kiadása/ellenőrzése
   (részletek: 10. szegmens).
-- **Statikus kiszolgálás:** az admin UI és a `/live` oldal kiszolgálása.
+- **Naplózás és jelentés:** minden állapotátmenet és 3 másodpercenként a
+  telemetria fájlba írása, ebből időszakos (élő/kiesés) jelentés és letölthető
+  CSV (**[`docs/MONITORING.md`](docs/MONITORING.md)**, 9. szegmens).
+- **Statikus kiszolgálás:** az admin UI, a `/live` oldal és a `/links`
+  link-gyűjtő kiszolgálása.
 - **Lejátszás-proxy:** WHEP és HLS továbbítása a MediaMTX felé, hogy a
   böngésző egyetlen originnel beszéljen, és a MediaMTX olvasási joga
   localhostra szorítva maradhasson (6. szegmens).
@@ -228,7 +232,8 @@ OnLIVE/
 │   ├── OVERLAY-MEDIA.md       # 5. szegmens — intro/outro/megszakadt média
 │   ├── OBS.md                 # 6. szegmens — Browser Source, WHEP/HLS lejátszás
 │   ├── WIDGETS.md             # 7. szegmens — widgetek, szerkesztő, sandbox
-│   └── ADMIN-UI.md            # 8. szegmens — admin felület, parancscsatorna
+│   ├── ADMIN-UI.md            # 8. szegmens — admin felület, parancscsatorna
+│   └── MONITORING.md          # 9. szegmens — monitor, napló, link-gyűjtő
 ├── infra/
 │   ├── cloudflared/
 │   │   ├── config.example.yml # tunnel konfiguráció sablon
@@ -247,6 +252,8 @@ OnLIVE/
 │   ├── src/media/             # média-tár és tartalom-alapú validáció
 │   ├── src/overlay/           # widgetek: pozíció, láthatóság, beágyazás-kulcsok
 │   ├── src/device/            # web UI → telefon parancssor és jelenlét
+│   ├── src/log/               # metrika-rögzítés és napló-összeállítás (CSV)
+│   ├── src/links/             # chat-link gyűjtő
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal
@@ -278,6 +285,6 @@ A teljes, előre rögzített szegmens-lista:
 | 6 | OBS integráció (Browser Source) | web | ✅ kész |
 | 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
 | 8 | Web UI: admin/vezérlő felület | web | ✅ kész |
-| 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ⬜ hátravan |
+| 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ✅ kész |
 | 10 | Biztonság és hitelesítés | szerver | ⬜ hátravan |
 | 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ⬜ hátravan |
