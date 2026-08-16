@@ -12,6 +12,59 @@ mapping between the two.
 
 ---
 
+## 1.0.012 — start.bat: fixed the vanishing window, added step-by-step output
+
+*2026-08-16*
+
+### Fixed: the window flashed and disappeared
+
+`start.bat` opened and closed instantly, showing nothing. The cause was a single
+unescaped character:
+
+```bat
+if errorlevel 1 (
+    echo   [!] A(z) "%TUNNEL_SERVICE%" service nincs telepitve.
+```
+
+Inside a parenthesised block the unescaped `)` in `A(z)` **closes the block**, so
+the later `) else (` became a syntax error and cmd aborted the whole file — before
+doing anything useful.
+
+The fix is not careful escaping but removing the hazard: the script now branches
+with `goto` and contains **no parenthesised blocks at all**, so this class of bug
+cannot come back. `server/test/start-script.test.js` enforces it, along with
+ASCII-only content, CRLF line endings, resolvable `goto` targets, and the rule
+that every error path ends at the shared `:end` with a `pause`. Verified against
+the old file: it fails there.
+
+### Added: you can see where the startup is
+
+```
+   [1/5] Cloudflare Tunnel ellenorzese
+         OK   A tunnel service mar fut.
+   [2/5] Node.js ellenorzese
+         OK   Node.js v22.11.0
+   [3/5] Port ellenorzese
+         OK   A szerver a 8080-es porton fog indulni.
+         Helyi cim:  http://localhost:8080/admin
+```
+
+- The **port and the local URL are printed before the server starts**, and the
+  script warns if something already listens there ("if it stops with EADDRINUSE,
+  this is why"). The port comes from the server's own configuration via the new
+  `server/tools/port.js`, so it matches whatever the Server tab is set to.
+- `npm` is checked separately from `node`, and a failed `npm install` stops with
+  an explanation instead of failing later in a confusing way.
+- On exit the script prints the **last 20 lines of the log**, formatted from the
+  JSON records — so a fast crash is visible even after the console scrolled.
+- Every path — including every error — ends with the window open and a clear
+  message. Each step is also appended to `logs/startup.log`, so even a hard
+  parse failure leaves a trace of how far it got.
+
+**172 tests, all green.**
+
+---
+
 ## 1.0.011 — Configurable server port, new default 8080
 
 *2026-08-16*

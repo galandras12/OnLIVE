@@ -132,24 +132,55 @@ beállítást, különben a rendszer háttérben megöli a capture-t.
 ### 3.1 Indítás — `start.bat`
 
 A projekt gyökerében lévő **`start.bat` dupla kattintással** indítja a teljes
-rendszert. Sorrendben:
-
-1. `cloudflared` service állapotának ellenőrzése, szükség esetén indítás
-   (**a Node előtt**: ha rendszergazdai jog kell hozzá, az még a szerver
-   felállása előtt kiderül),
-2. Node megléte, első indításkor `npm install`,
-3. `npm start`.
-
-Az ablak **nyitva marad**, és élőben mutatja a naplót. Leállítás: `Ctrl+C`.
-A `.bat` minden lépésről időbélyeges sort ír a `logs\startup.log`-ba, így
-utólag is látszik, mikor és mivel indult a rendszer:
+rendszert, és **lépésenként kiírja, hol tart**:
 
 ```
-2026.08.15. 19:04:11,23 | INDITAS  ---------------------------------------------
-2026.08.15. 19:04:11,88 | TUNNEL   mar futott
-2026.08.15. 19:04:12,10 | SZERVER  inditas
-2026.08.15. 21:37:02,44 | SZERVER  leallt (kilepesi kod: 0)
+   ============================================================
+      OnLIVE - inditas
+   ============================================================
+
+   [1/5] Cloudflare Tunnel ellenorzese
+         OK   A tunnel service mar fut.
+
+   [2/5] Node.js ellenorzese
+         OK   Node.js v22.11.0
+         OK   Fuggosegek rendben.
+
+   [3/5] Port ellenorzese
+         OK   A szerver a 8080-es porton fog indulni.
+         Helyi cim:  http://localhost:8080/admin
+
+   [4/5] MediaMTX ingest ellenorzese - az inditot koveti
+   [5/5] Vezerlo szerver inditasa
+
+   ------------------------------------------------------------
+    Innentol a szerver naploja latszik. Leallitas: Ctrl+C
+   ------------------------------------------------------------
 ```
+
+Ezután a szerver naplója **élőben, ebben az ablakban** fut tovább. Leállítás:
+`Ctrl+C`, majd egy billentyű.
+
+Amit még csinál:
+
+- ellenőrzi a Node meglétét és az `npm`-et, első indításkor lefuttatja az
+  `npm install`-t,
+- kiírja, **melyik porton** fog indulni és mi a helyi cím — még az indítás
+  előtt —, és szól, ha a portot már használja valami,
+- leállás után kiírja a **napló utolsó 20 sorát**, hogy egy gyors összeomlás
+  oka is látszódjon, ha a konzol már elgörgött,
+- minden lépésről időbélyeges sort ír a `logs\startup.log`-ba,
+- **minden hiba esetén is nyitva marad**, és megmondja, mi a teendő.
+
+> **Ha az ablak mégis felvillan és eltűnik**, az a `.bat` értelmezési hibája.
+> Nyiss egy `cmd` ablakot, és onnan indítsd (`cd C:\OnLIVE` majd `start.bat`) —
+> ott a hibaüzenet olvasható marad. A `logs\startup.log` utolsó sora is
+> megmutatja, meddig jutott.
+>
+> Az 1.0.011-ig ez rendszeresen előfordult: egy escape-eletlen zárójel egy
+> `echo` sorban lezárta a `(`-blokkot, amitől a cmd azonnal megszakította a
+> fájlt. A `start.bat` azóta blokkok helyett `goto`-val ágazik el, és a
+> `server/test/start-script.test.js` őrzi, hogy ez ne térjen vissza.
 
 ### 3.2 Indítás — parancssorból
 
@@ -228,7 +259,7 @@ következő adásra ([`docs/STATE-MACHINE.md`](STATE-MACHINE.md) 8.1).
 | Fájl | Mi van benne |
 |---|---|
 | `server/logs/YYYY-MM-DD.log` | **minden esemény**, soronként egy JSON objektum; dátumváltáskor új fájl |
-| `logs/startup.log` | a `start.bat` indítási/leállási sorai |
+| `logs/startup.log` | a `start.bat` lépésenkénti sorai (mikor, meddig jutott) |
 | `server/data/server.json` | a felületen beállított port (1.0.011) |
 | `server/data/transitions.jsonl` | csak az állapotátmenetek (a letölthető CSV alapja, 9. szegmens) |
 | `server/data/metrics.jsonl` | bitráta/felbontás minták a monitor-grafikonhoz |

@@ -12,6 +12,61 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.012 — start.bat: az eltűnő ablak javítása, lépésenkénti kiírás
+
+*2026-08-16*
+
+### Javítva: az ablak felvillant és eltűnt
+
+A `start.bat` megnyílt és azonnal bezárult, anélkül hogy bármit mutatott volna.
+Az okozó egyetlen escape-eletlen karakter volt:
+
+```bat
+if errorlevel 1 (
+    echo   [!] A(z) "%TUNNEL_SERVICE%" service nincs telepitve.
+```
+
+Zárójeles blokkon belül az `A(z)` escape-eletlen `)` jele **lezárja a blokkot**,
+így a későbbi `) else (` szintaktikai hibává vált, a cmd pedig megszakította az
+egész fájlt — még mielőtt bármi hasznosat csinált volna.
+
+A javítás nem a gondosabb escape-elés, hanem a veszély megszüntetése: a szkript
+mostantól `goto`-val ágazik el, és **egyetlen zárójeles blokkot sem tartalmaz**,
+így ez a hibaosztály nem térhet vissza. A `server/test/start-script.test.js`
+őrzi ezt, azzal együtt, hogy a fájl tisztán ASCII, CRLF sorvégű, minden `goto`
+célja létezik, és minden hibaút a közös `:end`-en, `pause`-zal ér véget. A régi
+fájlon ellenőrizve: ott bukik.
+
+### Új: látszik, hol tart az indulás
+
+```
+   [1/5] Cloudflare Tunnel ellenorzese
+         OK   A tunnel service mar fut.
+   [2/5] Node.js ellenorzese
+         OK   Node.js v22.11.0
+   [3/5] Port ellenorzese
+         OK   A szerver a 8080-es porton fog indulni.
+         Helyi cim:  http://localhost:8080/admin
+```
+
+- A **port és a helyi cím még az indítás előtt kiíródik**, és a szkript szól, ha
+  a portot már használja valami („ha most EADDRINUSE hibával áll meg, ez az
+  oka"). A port a szerver saját konfigurációjából jön az új
+  `server/tools/port.js`-en keresztül, tehát azt mutatja, amit a Szerver fülön
+  beállítottál.
+- Az `npm` meglétét a `node`-tól külön ellenőrzi, a sikertelen `npm install`
+  pedig magyarázattal áll meg, nem később, értelmezhetetlen hibával.
+- Leállás után kiírja a **napló utolsó 20 sorát**, a JSON rekordokból
+  formázva — így egy gyors összeomlás oka akkor is látszik, ha a konzol már
+  elgörgött.
+- Minden út — a hibásak is — nyitva hagyott ablakkal és érthető üzenettel ér
+  véget. Minden lépés bekerül a `logs/startup.log`-ba is, tehát egy kemény
+  értelmezési hiba után is látszik, meddig jutott.
+
+**172 teszt, mind zöld.**
+
+---
+
 ## 1.0.011 — Állítható szerver-port, új alapértelmezés: 8080
 
 *2026-08-16*

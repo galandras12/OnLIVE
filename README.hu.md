@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.011 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.012 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -22,7 +22,9 @@ scrypt hash-e tárolódik), valamint az Android app fogaskereke mögötti valód
 beállítás-képernyőt, ahol a kulcsot és a Tunnel címeit meg lehet adni.
 
 Az **1.0.011** a szerver portját teszi a webes felületről állíthatóvá — a
-következő indításkor lép életbe —, és az alapértelmezést **8080**-ra viszi.
+következő indításkor lép életbe —, és az alapértelmezést **8080**-ra viszi. Az
+**1.0.012** javítja a `start.bat`-ot, ami eddig felvillant és eltűnt, és
+lépésenkénti kiírást ad neki.
 
 A szegmensenkénti történet a [`CHANGELOG.hu.md`](CHANGELOG.hu.md) fájlban van, a
 géppel olvasható verziószám pedig a [`versions.onlive`](versions.onlive)-ban.
@@ -120,3 +122,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.000`](CHANGELOG.hu.md#10000--az-alap-szakasz-lezárása) | — | **Az alap szakasz lezárása** |
 | [`1.0.010`](CHANGELOG.hu.md#10010--streamkulcs-a-webes-felületen-kapcsolat-beállítás-a-telefonon) | — | Streamkulcs a webes felületen, kapcsolat-beállítás a telefonon |
 | [`1.0.011`](CHANGELOG.hu.md#10011--állítható-szerver-port-új-alapértelmezés-8080) | — | Állítható szerver-port, új alapértelmezés: 8080 |
+| [`1.0.012`](CHANGELOG.hu.md#10012--startbat-az-eltűnő-ablak-javítása-lépésenkénti-kiírás) | — | start.bat: az eltűnő ablak javítása, lépésenkénti kiírás |
