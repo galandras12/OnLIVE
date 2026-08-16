@@ -6,7 +6,18 @@ plugins {
 
 android {
     namespace = "com.galandras.onlive"
-    compileSdk = 35
+
+    /*
+      compileSdk: MILYEN API-k ellen fordítunk. A 36-ot a függőségek kérik —
+      a CameraX 1.6, az androidx.core 1.18 és az activity 1.13 mind
+      `minCompileSdk = 36`-tal jön, és e nélkül a build a
+      `checkDebugAarMetadata` lépésnél áll meg 13 hibával.
+
+      Ez FÜGGETLEN a targetSdk-tól: a compileSdk emelése csak annyit jelent,
+      hogy újabb API-k elérhetők fordításkor — futásidejű viselkedést nem
+      változtat. A targetSdk marad 34, lásd lentebb.
+    */
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.galandras.onlive"

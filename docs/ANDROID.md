@@ -491,6 +491,20 @@ unzip -p app/build/outputs/apk/debug/app-debug.apk "lib/arm64-v8a/*.so" > /dev/n
 # https://developer.android.com/guide/practices/page-sizes#alignment-use-script
 ```
 
+### compileSdk 36, targetSdk 34 — miért különbözik
+
+A kettő **külön dolog**, és szándékosan nem egyezik:
+
+| Beállítás | Érték | Mit jelent |
+|---|---|---|
+| `compileSdk` | **36** | milyen API-k ellen fordítunk. A CameraX 1.6, az androidx.core 1.18 és az activity 1.13 `minCompileSdk = 36`-tal jön — enélkül a build a `checkDebugAarMetadata` lépésnél áll meg |
+| `targetSdk` | **34** | milyen futásidejű viselkedésre iratkozunk fel. Ez a 2. szegmens döntése, lásd lentebb |
+| `minSdk` | **26** | mely eszközökre telepíthető |
+
+A `compileSdk` emelése önmagában **nem** változtat futásidejű viselkedést —
+csak újabb API-k válnak elérhetővé fordításkor. A `targetSdk` emelése az, ami
+új rendszerviselkedést kapcsol be.
+
 ### TargetSdk 34 → 35
 
 A `targetSdk` a szegmens explicit kérése szerint **34** (Android 14). API 35-re

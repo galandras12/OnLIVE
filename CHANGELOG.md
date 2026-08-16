@@ -12,6 +12,27 @@ mapping between the two.
 
 ---
 
+## 1.0.015 — compileSdk 36, so the new libraries build
+
+*2026-08-16*
+
+The 1.0.014 dependency bump failed at `:app:checkDebugAarMetadata` with 13
+issues: CameraX 1.6, androidx.core 1.18 and activity 1.13 all ship with
+`minCompileSdk = 36`, while the project compiled against 35.
+
+`compileSdk` is now **36**. As the error message itself points out, this is
+independent of the other two levels, so nothing about runtime behaviour changes:
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `compileSdk` | 36 | which APIs we compile against — required by the dependencies |
+| `targetSdk` | 34 | which runtime behaviour we opt into — unchanged, still the segment 2 decision |
+| `minSdk` | 26 | which devices can install the app |
+
+Android Studio may need to download the API 36 platform on the first sync.
+
+---
+
 ## 1.0.014 — 16 KB page-size compatibility, pinned toolchain
 
 *2026-08-16*

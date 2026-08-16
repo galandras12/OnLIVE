@@ -12,6 +12,28 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.015 — compileSdk 36, hogy az új könyvtárak leforduljanak
+
+*2026-08-16*
+
+Az 1.0.014-es függőségfrissítés a `:app:checkDebugAarMetadata` lépésnél állt meg
+13 hibával: a CameraX 1.6, az androidx.core 1.18 és az activity 1.13 mind
+`minCompileSdk = 36`-tal jön, a projekt viszont 35-tel fordított.
+
+A `compileSdk` mostantól **36**. Ahogy maga a hibaüzenet is kiemeli, ez
+független a másik két szinttől, tehát a futásidejű viselkedésen nem változtat:
+
+| Beállítás | Érték | Mit jelent |
+|---|---|---|
+| `compileSdk` | 36 | milyen API-k ellen fordítunk — ezt kérik a függőségek |
+| `targetSdk` | 34 | milyen futásidejű viselkedésre iratkozunk fel — változatlan, továbbra is a 2. szegmens döntése |
+| `minSdk` | 26 | mely eszközökre telepíthető az app |
+
+Az Android Studiónak az első sync-nél lehet, hogy le kell töltenie az API 36-os
+platformot.
+
+---
+
 ## 1.0.014 — 16 KB-os lapméret, rögzített eszközlánc
 
 *2026-08-16*
