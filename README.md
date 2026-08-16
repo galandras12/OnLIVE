@@ -61,7 +61,7 @@ copy .env.example .env          # fill in the secrets and ports
 # 2) media ingest: this is where the phone publishes
 #    docs/INGEST.md - chapter 6
 cd infra\mediamtx
-powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<stream key>"
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 
 # 3) control server
 cd ..\..\server
@@ -75,6 +75,51 @@ npm start
 Then create the stream key on the web UI — **Admin → Stream key** — and enter it
 on the phone under the gear icon (**Connection** section). The server only ever
 stores its hash, so copy it while it is shown.
+
+## Setting the admin password
+
+This is what you log in to `/admin` with. There is no default password: until you
+set one, **the admin UI only answers from the machine itself** (localhost) — a
+half-configured system must not stand open on a public address.
+
+**1. Generate the hash** (in the `server` directory, with your own password in
+quotes):
+
+```powershell
+cd server
+npm run hash-password -- "a long password of your own"
+```
+
+It prints one line:
+
+```
+ONLIVE_ADMIN_PASSWORD_HASH=scrypt$16384$8$1$DLTHAcA8J5gUQnAdVIGZtg==$kwqOkiDHIas...
+```
+
+**2. Copy that line into `.env`** in the project root (create it from
+`.env.example` if it does not exist yet), replacing the empty
+`ONLIVE_ADMIN_PASSWORD_HASH=` line. Delete the `ONLIVE_ADMIN_PASSWORD` line while
+you are there.
+
+**3. Restart the server** (`start.bat`, or `Ctrl+C` then `npm start`). Settings
+in `.env` are read at startup.
+
+**4. Log in**: open `http://localhost:8080/admin` — it sends you to the login
+page, where you type the password itself, not the hash.
+
+A few things worth knowing:
+
+- **Only the hash is stored**, so `.env` leaking does not hand over a usable
+  password. The plain `ONLIVE_ADMIN_PASSWORD=…` still works for convenience, but
+  the server warns about it at every start.
+- **Use at least 12 characters.** The tool warns if the password is short or a
+  well-known one, and the server reports weak secrets at startup and on the admin
+  header ("védelem" pill).
+- **Forgot it?** Nothing is tied to the old one: generate a new hash the same
+  way, replace the line, restart. Existing logins stay valid until they expire —
+  the **Security** section of the admin UI can also drop every session at once.
+- The password is only for the web UI. The phone uses the **stream key** and
+  never sees this password.
 
 After that the daily start is a single action: **`start.bat`** in the project
 root (tunnel check → MediaMTX → control server, in a console window that stays

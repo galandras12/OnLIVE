@@ -63,7 +63,7 @@ copy .env.example .env          # töltsd ki a titkokat és a portokat
 # 2) media ingest: a telefon ide publikál
 #    docs/INGEST.md → 6. fejezet
 cd infra\mediamtx
-powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 
 # 3) vezérlő szerver
 cd ..\..\server
@@ -77,6 +77,51 @@ npm start
 Ezután hozd létre a streamkulcsot a webes felületen — **Admin → Streamkulcs** —,
 és írd be a telefonon a fogaskerék mögötti **Kapcsolat** szekcióba. A szerver
 csak a hash-ét tárolja, ezért másold ki, amíg látszik.
+
+## Az admin jelszó beállítása
+
+Ezzel lépsz be az `/admin` felületre. Alapértelmezett jelszó **nincs**: amíg nem
+állítasz be egyet, **az admin felület csak magáról a gépről válaszol**
+(localhost) — egy félkonfigurált rendszer ne álljon nyitva a publikus címen.
+
+**1. Készítsd el a hash-t** (a `server` könyvtárban, idézőjelben a saját
+jelszavaddal):
+
+```powershell
+cd server
+npm run hash-password -- "egy hosszu sajat jelszo"
+```
+
+Kiír egy sort:
+
+```
+ONLIVE_ADMIN_PASSWORD_HASH=scrypt$16384$8$1$DLTHAcA8J5gUQnAdVIGZtg==$kwqOkiDHIas...
+```
+
+**2. Másold ezt a sort a `.env` fájlba** a projekt gyökerében (ha még nincs,
+hozd létre a `.env.example`-ből), az üres `ONLIVE_ADMIN_PASSWORD_HASH=` sor
+helyére. Az `ONLIVE_ADMIN_PASSWORD` sort pedig töröld.
+
+**3. Indítsd újra a szervert** (`start.bat`, vagy `Ctrl+C` és `npm start`). A
+`.env` beállításait a szerver induláskor olvassa be.
+
+**4. Lépj be**: nyisd meg a `http://localhost:8080/admin` címet — átdob a
+bejelentkező oldalra, ahol magát a jelszót írod be, nem a hash-t.
+
+Amit érdemes tudni:
+
+- **Csak a hash tárolódik**, tehát a `.env` kiszivárgása nem ad azonnal
+  használható jelszót. A sima `ONLIVE_ADMIN_PASSWORD=…` kényelmi okból továbbra
+  is működik, de a szerver minden indításkor figyelmeztet rá.
+- **Legalább 12 karakter** legyen. Az eszköz szól, ha rövid vagy közismert
+  jelszót adsz meg, a szerver pedig induláskor és az admin fejlécében
+  („védelem" jelző) is jelzi a gyenge titkokat.
+- **Elfelejtetted?** Semmi nem kötődik a régihez: csinálj új hash-t ugyanígy,
+  cseréld a sort, indítsd újra. A már belépett munkameneteket a lejáratukig
+  megtartja — az admin felület **Biztonság** része egyben ki is tudja léptetni
+  mindet.
+- A jelszó csak a webes felülethez kell. A telefon a **streamkulccsal**
+  hitelesít, ezt a jelszót sosem látja.
 
 Ezek után a napi indítás egyetlen mozdulat: **`start.bat`** a projekt gyökerében
 (tunnel-ellenőrzés → MediaMTX → vezérlő szerver, nyitva maradó konzollal).
