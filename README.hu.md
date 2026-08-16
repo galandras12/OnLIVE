@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.013 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.014 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -169,3 +169,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.011`](CHANGELOG.hu.md#10011--állítható-szerver-port-új-alapértelmezés-8080) | — | Állítható szerver-port, új alapértelmezés: 8080 |
 | [`1.0.012`](CHANGELOG.hu.md#10012--startbat-az-eltűnő-ablak-javítása-lépésenkénti-kiírás) | — | start.bat: az eltűnő ablak javítása, lépésenkénti kiírás |
 | [`1.0.013`](CHANGELOG.hu.md#10013--végre-van-kamerakép-és-a-lencseváltás-is-működik) | — | Végre van kamerakép, és a lencseváltás is működik |
+| [`1.0.014`](CHANGELOG.hu.md#10014--16-kb-os-lapméret-rögzített-eszközlánc) | — | 16 KB-os lapméret, rögzített eszközlánc |

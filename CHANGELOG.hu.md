@@ -12,6 +12,49 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.014 — 16 KB-os lapméret, rögzített eszközlánc
+
+*2026-08-16*
+
+A Galaxy S26 Ultra *„Az alkalmazás nem kompatibilis a 16 kB-os mérettel — az
+ELF-igazítási ellenőrzés sikertelen"* párbeszéddel fogadta az appot, négy natív
+könyvtárat felsorolva. Az új eszközök 16 KB-os memórialapokkal futnak, és minden
+`.so`-nak ehhez igazítva kell lennie.
+
+Az igazítás **a könyvtárak dolga**, ezért a megoldás verziófrissítés — az
+alábbiak már igazított kiadások:
+
+| Könyvtár | Volt | Lett | Melyik `.so`-t javítja |
+|---|---|---|---|
+| CameraX | 1.3.4 | 1.6.1 | `libimage_processing_util_jni.so` |
+| DataStore | 1.1.1 | 1.2.1 | `libdatastore_shared_counter.so` |
+| Compose BOM | 2024.09.02 | 2026.06.01 | `libandroidx.graphics.path.so` |
+| WebRTC | 125.6422.07 | 144.7559.12 | `libjingle_peerconnection_so.so` |
+
+A mi oldalunkon csak a csomagolás számít: a `jniLibs { useLegacyPackaging = false }`
+mostantól ki van mondva, tehát a natív fájlok tömörítetlenül, laphatárra
+igazítva kerülnek az APK-ba (az AGP minSdk 23 felett alapból is így csinálja).
+
+### Eszközlánc
+
+- **AGP 8.5.2 → 8.13.2.** Ez szünteti meg a *„tested up to compileSdk = 34"*
+  figyelmeztetést — a projekt 35-tel fordít.
+- **A Gradle verziója rögzítve: 8.14.5**, új
+  `gradle/wrapper/gradle-wrapper.properties` fájlban. Eddig egyáltalán nem volt
+  wrapper-beállítás, ezért az Android Studio azt használta, ami épp nála volt
+  (itt 9.3.0), és a build gépről gépre más lett. Az AGP és a Gradle együtt
+  mozog; a fájl ezt ki is mondja, és hivatkozza a kompatibilitási táblázatot.
+- **Kotlin 2.0.20 → 2.3.21**, a `kotlinOptions` helyett a mai
+  `kotlin { compilerOptions { … } }` blokkal, plusz frissült a core-ktx, a
+  lifecycle, az activity-compose és a coroutines.
+
+> Minden verzió a tényleges Maven-metaadatból lett ellenőrizve, de ebben a
+> környezetben nincs Android SDK: **magát a fordítást nem tudtam kipróbálni**.
+> Ha a Gradle sync elakad, ez a commit önmagában visszavonható — az 1.0.013-as
+> kamerajavítások nem függenek tőle.
+
+---
+
 ## 1.0.013 — Végre van kamerakép, és a lencseváltás is működik
 
 *2026-08-16*

@@ -431,16 +431,55 @@ android/app/src/main/java/com/galandras/onlive/
 
 ## 9. Build
 
-A repó **nem tartalmazza a Gradle wrappert** (bináris `gradle-wrapper.jar`).
-Első fordítás előtt:
+A Gradle **verziója rögzített** (`gradle/wrapper/gradle-wrapper.properties`),
+a wrapper **binárisa viszont nincs a repóban**. Első fordítás előtt:
 
 ```bash
 cd android
-gradle wrapper --gradle-version 8.7    # vagy: nyisd meg Android Studióban, az generálja
+gradle wrapper          # a rögzített verziót használja; vagy nyisd meg Android Studióban
 ./gradlew assembleDebug
 ```
 
 Telepítés: `./gradlew installDebug`, vagy `adb install app/build/outputs/apk/debug/app-debug.apk`.
+
+### Verziók — mi mivel mozog együtt
+
+| Mi | Hol | Megjegyzés |
+|---|---|---|
+| Gradle | `gradle/wrapper/gradle-wrapper.properties` | az AGP-hez igazodik |
+| AGP, Kotlin, könyvtárak | `gradle/libs.versions.toml` | egy helyen, verzió-katalógusban |
+
+Az AGP és a Gradle **együtt mozog**: az AGP 8.13 legalább Gradle 8.13-at kér
+([kompatibilitási táblázat](https://developer.android.com/build/releases/gradle-plugin)).
+Ha az Android Studio azt írja, hogy *„Gradle X is not the latest minor version"*,
+az csak IDE-figyelmeztetés — a rögzített verzió a fontos, nem a legfrissebb.
+
+### 16 KB-os lapméret (Android 15+)
+
+Az új eszközök (pl. Galaxy S26) 16 KB-os memórialapokkal futnak. A telefon
+`Az alkalmazás nem kompatibilis a 16 kB-os mérettel` párbeszéddel jelzi, ha egy
+natív `.so` nincs laphatárra igazítva, és fel is sorolja, melyik:
+
+| Könyvtár | Honnan jön |
+|---|---|
+| `libimage_processing_util_jni.so` | CameraX |
+| `libdatastore_shared_counter.so` | DataStore |
+| `libandroidx.graphics.path.so` | Compose (graphics-path) |
+| `libjingle_peerconnection_so.so` | WebRTC |
+
+Az igazítás **a könyvtárak dolga**, nem a miénk: a megoldás a függőségek
+frissítése olyan kiadásra, ami már igazítva van (`libs.versions.toml`). A mi
+oldalunkon annyi kell, hogy a natív fájlok tömörítetlenül kerüljenek az APK-ba
+— ezt az `app/build.gradle.kts` `packaging { jniLibs { useLegacyPackaging = false } }`
+mondja ki (az AGP alapból is így csinálja minSdk 23 felett).
+
+Ellenőrzés a lefordított APK-n:
+
+```bash
+unzip -p app/build/outputs/apk/debug/app-debug.apk "lib/arm64-v8a/*.so" > /dev/null
+# vagy a hivatalos szkript:
+# https://developer.android.com/guide/practices/page-sizes#alignment-use-script
+```
 
 ### TargetSdk 34 → 35
 

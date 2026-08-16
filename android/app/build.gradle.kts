@@ -36,9 +36,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // A kotlinOptions blokk elavult a Kotlin 2.x-ben; a fordító beállításai a
+    // lenti `kotlin { compilerOptions { … } }` blokkban vannak.
 
     buildFeatures {
         compose = true
@@ -47,6 +46,27 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+
+        /*
+          16 KB-os lapméret (Android 15+, pl. Galaxy S26).
+
+          A natív .so fájloknak tömörítetlenül, laphatárra igazítva kell az
+          APK-ba kerülniük. Az AGP ezt minSdk 23 felett alapból így csinálja —
+          itt csak kimondjuk, hogy egy későbbi módosítás se kapcsolja vissza a
+          régi, tömörített csomagolást.
+
+          Maga az ELF-igazítás a KÖNYVTÁRAK dolga: azt a függőségek verziója
+          adja (lásd gradle/libs.versions.toml).
+        */
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

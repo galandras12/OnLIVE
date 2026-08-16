@@ -12,6 +12,47 @@ mapping between the two.
 
 ---
 
+## 1.0.014 — 16 KB page-size compatibility, pinned toolchain
+
+*2026-08-16*
+
+A Galaxy S26 Ultra refused the app with *"not compatible with the 16 KB size —
+ELF alignment check failed"*, listing four native libraries. New devices run
+with 16 KB memory pages, and every `.so` has to be aligned to that.
+
+The alignment is the **libraries'** job, so the fix is a version bump — all of
+these ship 16 KB-aligned builds:
+
+| Library | Was | Now | The `.so` it fixes |
+|---|---|---|---|
+| CameraX | 1.3.4 | 1.6.1 | `libimage_processing_util_jni.so` |
+| DataStore | 1.1.1 | 1.2.1 | `libdatastore_shared_counter.so` |
+| Compose BOM | 2024.09.02 | 2026.06.01 | `libandroidx.graphics.path.so` |
+| WebRTC | 125.6422.07 | 144.7559.12 | `libjingle_peerconnection_so.so` |
+
+On our side only the packaging matters: `jniLibs { useLegacyPackaging = false }`
+is now stated explicitly, so native files stay uncompressed and page-aligned
+(AGP already defaults to this above minSdk 23).
+
+### Toolchain
+
+- **AGP 8.5.2 → 8.13.2.** This clears the *"tested up to compileSdk = 34"*
+  warning — the project compiles against 35.
+- **Gradle is pinned at 8.14.5** via a new `gradle/wrapper/gradle-wrapper.properties`.
+  There was no wrapper config at all before, so Android Studio used whatever it
+  had (9.3.0 here) and the build differed from machine to machine. AGP and
+  Gradle move together; the file says so and links the compatibility table.
+- **Kotlin 2.0.20 → 2.3.21**, with `kotlinOptions` replaced by the modern
+  `kotlin { compilerOptions { … } }` block, plus refreshed core-ktx, lifecycle,
+  activity-compose and coroutines.
+
+> Every version here was checked against the actual Maven metadata, but this
+> environment has no Android SDK: **the build itself is unverified**. If a
+> Gradle sync fails, this commit is self-contained and can be reverted on its
+> own — the camera fixes in 1.0.013 do not depend on it.
+
+---
+
 ## 1.0.013 — Camera preview and lens switching actually work
 
 *2026-08-16*
