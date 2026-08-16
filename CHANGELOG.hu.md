@@ -39,11 +39,13 @@ igazítva kerülnek az APK-ba (az AGP minSdk 23 felett alapból is így csinálj
 
 - **AGP 8.5.2 → 8.13.2.** Ez szünteti meg a *„tested up to compileSdk = 34"*
   figyelmeztetést — a projekt 35-tel fordít.
-- **A Gradle verziója rögzítve: 8.14.5**, új
-  `gradle/wrapper/gradle-wrapper.properties` fájlban. Eddig egyáltalán nem volt
-  wrapper-beállítás, ezért az Android Studio azt használta, ami épp nála volt
-  (itt 9.3.0), és a build gépről gépre más lett. Az AGP és a Gradle együtt
-  mozog; a fájl ezt ki is mondja, és hivatkozza a kompatibilitási táblázatot.
+- **A Gradle verziója rögzítve** a `gradle/wrapper/gradle-wrapper.properties`-ben
+  (9.3.0, a mellé bekerült wrapperrel együtt). Eddig egyáltalán nem volt
+  wrapper-beállítás, ezért az Android Studio azt használta, ami épp nála volt, és
+  a build gépről gépre más lett. A minimumot az AGP maga ellenőrzi — magukból az
+  AGP jarokból kiolvasva: **AGP 8.13.x → Gradle ≥ 8.13, AGP 9.x → ≥ 9.5**. A
+  8.13.2 tehát elégedett a 9.3.0-val, és a 9.7.0-ra lépéshez sem kell AGP-t
+  váltani.
 - **Kotlin 2.0.20 → 2.3.21**, a `kotlinOptions` helyett a mai
   `kotlin { compilerOptions { … } }` blokkal, plusz frissült a core-ktx, a
   lifecycle, az activity-compose és a coroutines.

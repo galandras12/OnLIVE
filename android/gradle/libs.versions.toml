@@ -2,10 +2,11 @@
 # ---------------------------------------------------------------------------
 #  Eszközlánc
 #
-#  AGP és Gradle EGYÜTT mozog: az AGP 8.13 legalább Gradle 8.13-at kér, ezért a
-#  wrapper a 8.14.5-ön áll (gradle/wrapper/gradle-wrapper.properties). Ha az
-#  egyiket emeled, a másikat is nézd meg:
-#  https://developer.android.com/build/releases/gradle-plugin
+#  AGP és Gradle EGYÜTT mozog. A minimumot az AGP maga ellenőrzi:
+#      AGP 8.13.x → Gradle >= 8.13
+#      AGP 9.x    → Gradle >= 9.5
+#  A wrapper jelenleg Gradle 9.3.0-n áll (gradle/wrapper/gradle-wrapper.properties),
+#  ami a 8.13.2-höz bőven megfelel. AGP 9-re CSAK Gradle 9.5+ mellett lépj.
 #
 #  Az AGP 8.5.2 „tested up to compileSdk 34" volt, a projekt viszont 35-öt
 #  fordít — ezt a figyelmeztetést szünteti meg a 8.13-ra lépés.

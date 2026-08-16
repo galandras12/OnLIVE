@@ -431,12 +431,11 @@ android/app/src/main/java/com/galandras/onlive/
 
 ## 9. Build
 
-A Gradle **verziója rögzített** (`gradle/wrapper/gradle-wrapper.properties`),
-a wrapper **binárisa viszont nincs a repóban**. Első fordítás előtt:
+A Gradle **verziója rögzített** (`gradle/wrapper/gradle-wrapper.properties`), és
+a wrapper (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`) is a repóban van:
 
 ```bash
 cd android
-gradle wrapper          # a rögzített verziót használja; vagy nyisd meg Android Studióban
 ./gradlew assembleDebug
 ```
 
@@ -449,10 +448,21 @@ Telepítés: `./gradlew installDebug`, vagy `adb install app/build/outputs/apk/d
 | Gradle | `gradle/wrapper/gradle-wrapper.properties` | az AGP-hez igazodik |
 | AGP, Kotlin, könyvtárak | `gradle/libs.versions.toml` | egy helyen, verzió-katalógusban |
 
-Az AGP és a Gradle **együtt mozog**: az AGP 8.13 legalább Gradle 8.13-at kér
-([kompatibilitási táblázat](https://developer.android.com/build/releases/gradle-plugin)).
+Az AGP és a Gradle **együtt mozog**. Az AGP maga ellenőrzi a minimumot
+(`VersionCheckPlugin`), a jelenlegi állás:
+
+| AGP | Minimum Gradle |
+|---|---|
+| 8.13.x | 8.13 |
+| 9.x | 9.5 |
+
+A projekt AGP 8.13.2-t használ, a wrapper Gradle 9.3.0-t — ez bőven megfelel, és
+a 9.7.0-ra lépés is mehet, ha az Android Studio azt ajánlja (AGP-t ahhoz nem
+kell váltani). Amit viszont **ne** tegyél: AGP 9-re lépni Gradle 9.5 alatt — az
+AGP a sync legelején leáll.
+
 Ha az Android Studio azt írja, hogy *„Gradle X is not the latest minor version"*,
-az csak IDE-figyelmeztetés — a rögzített verzió a fontos, nem a legfrissebb.
+az csak IDE-figyelmeztetés: a rögzített, működő verzió a fontos, nem a legfrissebb.
 
 ### 16 KB-os lapméret (Android 15+)
 

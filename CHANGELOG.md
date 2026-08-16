@@ -38,10 +38,12 @@ is now stated explicitly, so native files stay uncompressed and page-aligned
 
 - **AGP 8.5.2 → 8.13.2.** This clears the *"tested up to compileSdk = 34"*
   warning — the project compiles against 35.
-- **Gradle is pinned at 8.14.5** via a new `gradle/wrapper/gradle-wrapper.properties`.
-  There was no wrapper config at all before, so Android Studio used whatever it
-  had (9.3.0 here) and the build differed from machine to machine. AGP and
-  Gradle move together; the file says so and links the compatibility table.
+- **The Gradle version is now pinned** in `gradle/wrapper/gradle-wrapper.properties`
+  (9.3.0, matching the wrapper committed alongside). There was no wrapper config
+  at all before, so Android Studio used whatever it had and the build differed
+  from machine to machine. AGP enforces its own minimum — read out of the AGP
+  jars themselves: **AGP 8.13.x needs Gradle ≥ 8.13, AGP 9.x needs ≥ 9.5**. So
+  8.13.2 is happy on 9.3.0, and moving Gradle to 9.7.0 needs no AGP change.
 - **Kotlin 2.0.20 → 2.3.21**, with `kotlinOptions` replaced by the modern
   `kotlin { compilerOptions { … } }` block, plus refreshed core-ktx, lifecycle,
   activity-compose and coroutines.
