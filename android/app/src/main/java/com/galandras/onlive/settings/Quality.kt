@@ -103,7 +103,21 @@ enum class LensKind(val label: String) {
 /** Egy konkrét, az eszközön ténylegesen elérhető lencse. */
 data class LensOption(
     val kind: LensKind,
+    /** A logikai kamera azonosítója, amit a CameraX is ismer. */
     val cameraId: String,
     val focalLengthMm: Float,
     val isFront: Boolean,
+    /**
+     * Hányszoros zoomnál kapcsol át a rendszer erre az optikára.
+     *
+     * A modern telefonokon (Samsung, Pixel) a hátlapi kamerák EGYETLEN logikai
+     * kamera mögött vannak: a `cameraIdList` csak azt az egyet adja vissza, a
+     * tele és a nagylátószögű pedig fizikai alkamera. Váltani ezért nem
+     * kamera-azonosítóval lehet, hanem **zoom-aránnyal** — a rendszer a
+     * küszöböt átlépve magától vált optikát.
+     *
+     * Az arány a fókusztávolságok hányadosa a fő lencséhez képest
+     * (pl. 17 mm / 6,4 mm ≈ 2,7×), a kamera tényleges zoom-tartományára vágva.
+     */
+    val zoomRatio: Float = 1f,
 )

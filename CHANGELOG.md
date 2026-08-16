@@ -12,6 +12,61 @@ mapping between the two.
 
 ---
 
+## 1.0.013 — Camera preview and lens switching actually work
+
+*2026-08-16*
+
+Three symptoms on a Galaxy S26 Ultra, one shared root cause plus one separate
+bug — both in the app.
+
+### Black preview, dead lens buttons
+
+The capture pipeline lives in the Service so a broadcast survives switching
+apps. But the camera was only ever started by **"Kezdés"**, so opening the app
+bound no camera at all: the preview stayed black, and because `cameraSource`
+was `null`, the lens buttons, the torch and the photo button silently did
+nothing.
+
+There is now a preview mode: the Service starts the camera when the Activity
+becomes visible (`ACTION_PREVIEW`) and releases it when the Activity goes away
+— unless a broadcast is running, in which case it keeps streaming untouched.
+Pressing "Kezdés" now only adds the WHIP connection to an already-running
+camera.
+
+While previewing, frame conversion is throttled to ~2 fps: the WebRTC sink is
+`null` then, so converting 1080p30 YUV → I420 would burn CPU and battery for
+frames nobody consumes. The throttled frame is what the photo button uses.
+
+### Optics could not be switched
+
+Lens discovery walked `cameraIdList` and then filtered CameraX cameras by
+`Camera2CameraInfo.cameraId`. On modern phones the rear optics sit behind a
+single *logical* camera — `cameraIdList` returns just that one, and the tele and
+ultra-wide are *physical* sub-cameras whose ids CameraX never reports. So the
+filter always came up empty, the fallback returned the same camera, and the
+switch silently did nothing.
+
+Now the physical sub-cameras are read via `getPhysicalCameraIds()` (API 28+),
+classified by focal length, and switched with a **zoom ratio** (focal ÷ main
+focal, clamped to the camera's real zoom range) — which is how the system picks
+the physical optic. Front ↔ back still uses a `CameraSelector`, because that
+genuinely is a separate camera.
+
+A welcome side effect: switching between rear optics no longer rebinds the
+camera, so it is instant instead of dropping 300–800 ms of frames.
+
+### Compiler warnings
+
+`Icons.Filled.ArrowBack` / `ScreenShare` → the `AutoMirrored` variants, and the
+`@OptIn(ExperimentalCamera2Interop::class)` that the current CameraX no longer
+requires (it warned that the annotation has no effect) is gone.
+
+> Verified by reading and static checks only — there is no Android SDK in this
+> environment, so the build and the device behaviour still need a run on your
+> machine.
+
+---
+
 ## 1.0.012 — start.bat: fixed the vanishing window, added step-by-step output
 
 *2026-08-16*

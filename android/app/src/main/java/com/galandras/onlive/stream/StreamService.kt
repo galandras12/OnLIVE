@@ -106,6 +106,8 @@ class StreamService : LifecycleService() {
             ACTION_TAKE_PHOTO -> handlePhoto()
             ACTION_TOGGLE_RECORDING -> handleToggleRecording()
             ACTION_APPLY_SETTINGS -> handleApplySettings()
+            ACTION_PREVIEW -> handlePreview()
+            ACTION_PREVIEW_STOP -> handlePreviewStop()
             else -> Unit
         }
 
@@ -137,6 +139,48 @@ class StreamService : LifecycleService() {
         controlApi.sessionStart(settings)
 
         connectWithRetry(settings)
+    }
+
+    /**
+     * Kamera-előnézet indítása adás nélkül (1.0.013).
+     *
+     * Miért kell: a capture a Service-ben él (hogy az adás túlélje az
+     * appváltást), viszont eddig CSAK a „Kezdés" indította el. Az app
+     * megnyitásakor így nem volt bekötött kamera — fekete kép —, és a
+     * `cameraSource` null volta miatt a lencseváltás és a vaku sem csinált
+     * semmit.
+     *
+     * Adást NEM indít: se WHIP kapcsolat, se session-jelzés a szervernek.
+     * Csak a kamera fut, hogy legyen mit nézni és mit állítani.
+     */
+    private fun handlePreview() = lifecycleScope.launch {
+        if (userWantsLive) return@launch          // adás közben már fut a kamera
+        if (currentSource == CaptureSource.SCREEN) return@launch
+
+        val settings = appSettings.current()
+        if (cameraSource?.isRunning == true) {
+            cameraSource?.setSurfaceProvider(StreamBus.surfaceProvider.value)
+            return@launch
+        }
+
+        runCatching { startCameraCapture(settings) }
+            .onFailure {
+                Log.w(TAG, "Az előnézet indítása nem sikerült: ${it.message}")
+                StreamBus.setMessage("A kamera nem indult el: ${it.message}")
+            }
+    }
+
+    /**
+     * Az Activity eltűnt. Ha nem megy adás, elengedjük a kamerát és a
+     * foreground állapotot — nem tartunk fenn értesítést és kamerát csak azért,
+     * mert egyszer megnyitották az appot.
+     */
+    private fun handlePreviewStop() = lifecycleScope.launch {
+        if (userWantsLive) return@launch
+
+        cameraSource?.stop()
+        ServiceCompat.stopForeground(this@StreamService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     private fun handleStop() = lifecycleScope.launch {
@@ -656,6 +700,18 @@ class StreamService : LifecycleService() {
         const val ACTION_TAKE_PHOTO = "com.galandras.onlive.TAKE_PHOTO"
         const val ACTION_TOGGLE_RECORDING = "com.galandras.onlive.TOGGLE_RECORDING"
         const val ACTION_APPLY_SETTINGS = "com.galandras.onlive.APPLY_SETTINGS"
+
+        /**
+         * Kamera-előnézet adás NÉLKÜL (1.0.013).
+         *
+         * Az app megnyitásakor ez indítja el a kamerát, hogy legyen kép és
+         * működjenek a lencsegombok. Korábban a kamera csak a „Kezdés"-re
+         * indult el, ezért az app fekete volt, a lencseváltás pedig néma.
+         */
+        const val ACTION_PREVIEW = "com.galandras.onlive.PREVIEW"
+
+        /** Előnézet leállítása, ha nem megy adás (az Activity eltűnésekor). */
+        const val ACTION_PREVIEW_STOP = "com.galandras.onlive.PREVIEW_STOP"
 
         const val EXTRA_SOURCE = "source"
         const val EXTRA_LENS = "lens"

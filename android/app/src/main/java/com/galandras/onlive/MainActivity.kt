@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
             granted[Manifest.permission.RECORD_AUDIO] == true
         ) {
             maybePromptBackgroundPermissions()
+            // Most már van kameránk — induljon a kép, ne csak adásindításkor.
+            startPreview()
         }
     }
 
@@ -207,6 +209,38 @@ class MainActivity : ComponentActivity() {
     // folytonosságát a Foreground Service + wakelock + akku-kizárás adja;
     // a PIP csak annyit tesz hozzá, hogy appváltás után is látod a képet.
     // -----------------------------------------------------------------------
+
+    /**
+     * Kamera-előnézet, amíg az app látszik (1.0.013).
+     *
+     * A capture a Service-ben él, hogy az adás túlélje az appváltást — de ettől
+     * még az app megnyitásakor is kell kép. Enélkül a felület fekete marad, és
+     * a lencseváltás sem csinál semmit, mert nincs bekötött kamera.
+     */
+    override fun onStart() {
+        super.onStart()
+        startPreview()
+    }
+
+    /**
+     * Az app eltűnt. Ha megy az adás, a Service ezt figyelmen kívül hagyja és
+     * tovább streamel; ha nem, elengedi a kamerát — nem tartunk fenn kamerát és
+     * értesítést azért, mert egyszer megnyitották az appot.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) {
+            StreamService.send(this, StreamService.ACTION_PREVIEW_STOP)
+        }
+    }
+
+    private fun startPreview() {
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) return
+
+        StreamService.send(this, StreamService.ACTION_PREVIEW)
+    }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()

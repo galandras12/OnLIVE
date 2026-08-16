@@ -12,9 +12,7 @@ import android.provider.MediaStore
 import android.util.Log
 import android.util.Range
 import android.util.Size
-import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
-import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -56,7 +54,6 @@ import kotlin.coroutines.resume
  * kamera-session a Service élettartamához kötött, és a UI jövés-menése nem
  * érinti.
  */
-@OptIn(ExperimentalCamera2Interop::class)
 class CameraSource(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
@@ -75,6 +72,9 @@ class CameraSource(
     private var surfaceProvider: Preview.SurfaceProvider? = null
     private var boundLens: LensKind? = null
 
+    /** Az utolsó konvertált képkocka ideje — az előnézeti ritkítás alapja. */
+    private var lastPreviewFrameAt = 0L
+
     /** A tényleg létező fizikai lencsék, a Camera2 metaadatok alapján. */
     val lenses: List<LensOption> by lazy { enumerateLenses() }
 
@@ -88,14 +88,49 @@ class CameraSource(
     suspend fun start(settings: Settings) = bind(settings, settings.lens)
 
     /**
-     * Élő lencseváltás. A CameraX-nek újra kell kötnie a kamerát (a Camera2
-     * session lencsénként külön), ezért van egy rövid, jellemzően 300–800 ms-os
-     * kép-kiesés. A WebRTC session NEM szakad meg: ugyanaz a VideoSource és
-     * ugyanaz a PeerConnection marad, csak nem érkezik pár képkocka.
+     * Élő lencseváltás.
+     *
+     * Ha ugyanazon az oldalon maradunk (fő ↔ tele ↔ nagylátószögű), akkor
+     * NINCS újrakötés: csak a zoom-arányt állítjuk, amitől a rendszer maga vált
+     * fizikai optikát. Így a váltás azonnali, és egyetlen képkocka sem esik ki.
+     *
+     * Oldalváltásnál (elő ↔ hátlapi) viszont tényleg új Camera2 session kell,
+     * ott marad a 300–800 ms-os kiesés. A WebRTC session ilyenkor sem szakad
+     * meg: ugyanaz a VideoSource és PeerConnection marad.
      */
     suspend fun switchLens(settings: Settings, lens: LensKind) {
         if (boundLens == lens) return
+
+        val target = lenses.firstOrNull { it.kind == lens }
+        val current = lenses.firstOrNull { it.kind == boundLens }
+
+        if (target != null && current != null && target.isFront == current.isFront && camera != null) {
+            applyZoom(target)
+            boundLens = lens
+            StreamBus.update { it.copy(lens = lens, availableLenses = lenses) }
+            Log.i(TAG, "Optikaváltás zoommal: $lens (${target.zoomRatio}x)")
+            return
+        }
+
         bind(settings, lens)
+    }
+
+    /**
+     * A lencséhez tartozó zoom beállítása, a kamera tényleges tartományára
+     * vágva: a számított arány (fókusztávolság-hányados) nem feltétlenül esik
+     * bele — a rendszer jellemzően 0,5× alá nem enged, felfelé pedig a digitális
+     * zoom határáig.
+     */
+    private fun applyZoom(option: LensOption) {
+        val control = camera?.cameraControl ?: return
+        val zoomState = camera?.cameraInfo?.zoomState?.value
+
+        val ratio = if (zoomState != null) {
+            option.zoomRatio.coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+        } else {
+            option.zoomRatio
+        }
+        control.setZoomRatio(ratio)
     }
 
     private suspend fun bind(settings: Settings, lens: LensKind) = withContext(Dispatchers.Main) {
@@ -158,6 +193,10 @@ class CameraSource(
         boundLens = lens
         previewUseCase.setSurfaceProvider(surfaceProvider)
 
+        // A hátlapi optikák egyetlen logikai kamera mögött vannak: a konkrét
+        // lencsét a zoom-arány választja ki, nem a kamera-azonosító.
+        lenses.firstOrNull { it.kind == lens }?.let(::applyZoom)
+
         StreamBus.update { it.copy(lens = lens, availableLenses = lenses) }
         Log.i(TAG, "Kamera elindult: lencse=$lens, ${size.width}x${size.height}@${settings.frameRate.fps}")
     }
@@ -188,6 +227,20 @@ class CameraSource(
 
     private fun onImage(image: ImageProxy) {
         try {
+            /*
+              Előnézet közben nincs kinek átadni a képkockát: a WebRTC oldali
+              fogadó (`downstream`) csak élő adás alatt létezik. A YUV → I420
+              konverzió viszont drága — 1080p30-nál folyamatosan terhelné a
+              CPU-t és az akkumulátort azért, hogy az eredményt eldobjuk.
+              Ilyenkor ezért csak ritkán konvertálunk: annyiszor, hogy a
+              „kép mentése" gombnak legyen friss képkockája.
+            */
+            val now = System.currentTimeMillis()
+            if (fanout.downstream == null && now - lastPreviewFrameAt < PREVIEW_FRAME_INTERVAL_MS) {
+                return
+            }
+            lastPreviewFrameAt = now
+
             val buffer = ImageProxyConverter.toI420(image)
             val frame = VideoFrame(
                 buffer,
@@ -283,68 +336,104 @@ class CameraSource(
     // Lencsék felderítése
     // -----------------------------------------------------------------------
 
+    /**
+     * A kamera kiválasztása KIZÁRÓLAG oldal szerint (elő- vagy hátlapi).
+     *
+     * Korábban itt egy kamera-azonosítós szűrő is volt, de az sosem talált: a
+     * tele és a nagylátószögű fizikai alkamera, azok azonosítóját a CameraX nem
+     * ismeri, így a szűrő mindig üresre futott és a tartalék ágon ugyanaz a
+     * kamera jött vissza — a váltás némán elmaradt. A konkrét optikát mostantól
+     * a zoom-arány választja ki (lásd [applyZoom]).
+     */
     private fun selectorFor(lens: LensKind): CameraSelector {
-        val option = lenses.firstOrNull { it.kind == lens }
-            ?: lenses.firstOrNull { it.kind == LensKind.MAIN }
-            ?: return CameraSelector.DEFAULT_BACK_CAMERA
+        val front = lenses.firstOrNull { it.kind == lens }?.isFront ?: (lens == LensKind.FRONT)
 
-        return CameraSelector.Builder()
-            .requireLensFacing(
-                if (option.isFront) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
-            )
-            .addCameraFilter { infos ->
-                infos.filter { Camera2CameraInfo.from(it).cameraId == option.cameraId }
-                    .ifEmpty { infos }
-            }
-            .build()
+        return if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
     }
 
     /**
-     * A fizikai lencsék besorolása. Nem hardcode-olt kamera-id-kre épül,
-     * hanem a Camera2 metaadatokra:
-     *  - a fő kamera konvenció szerint a `cameraIdList` első hátlapi eleme,
-     *  - a nála rövidebb fókusztávolságú hátlapi lencse a nagylátószögű,
-     *  - a hosszabb fókusztávolságú a tele.
+     * A fizikai lencsék besorolása.
+     *
+     * MIÉRT NEM A `cameraIdList`-BŐL: a modern telefonokon (Samsung Galaxy S,
+     * Pixel) a hátlapi optikák EGYETLEN logikai kamera mögött vannak. A
+     * `cameraIdList` így csak egy hátlapi kamerát ad vissza, a tele és a
+     * nagylátószögű pedig **fizikai alkamera** — azok azonosítóját a
+     * `getPhysicalCameraIds()` adja, és a CameraX `Camera2CameraInfo.cameraId`
+     * SOSEM egyezik velük. Emiatt a korábbi felderítés egyetlen hátlapi
+     * lencsét talált, a kamera-azonosítós szűrő pedig sosem fogott.
+     *
+     * Ezért a fizikai alkamerák fókusztávolságából **zoom-arányt** számolunk:
+     * a rendszer a küszöböt átlépve magától kapcsol optikát. Ez ráadásul
+     * gyorsabb is — nem kell újrakötni a kamerát.
      */
     private fun enumerateLenses(): List<LensOption> = runCatching {
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         val result = mutableListOf<LensOption>()
-        val backCameras = mutableListOf<Pair<String, Float>>()
 
+        // --- előlapi: itt tényleg külön logikai kamera van ---
         for (id in manager.cameraIdList) {
             val characteristics = manager.getCameraCharacteristics(id)
-            val focal = characteristics
-                .get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
-                ?.minOrNull() ?: continue
+            if (characteristics.get(CameraCharacteristics.LENS_FACING) !=
+                CameraCharacteristics.LENS_FACING_FRONT
+            ) continue
 
-            when (characteristics.get(CameraCharacteristics.LENS_FACING)) {
-                CameraCharacteristics.LENS_FACING_FRONT ->
-                    if (result.none { it.kind == LensKind.FRONT }) {
-                        result += LensOption(LensKind.FRONT, id, focal, isFront = true)
-                    }
-
-                CameraCharacteristics.LENS_FACING_BACK -> backCameras += id to focal
-            }
+            val focal = focalOf(characteristics) ?: continue
+            result += LensOption(LensKind.FRONT, id, focal, isFront = true)
+            break
         }
 
-        val main = backCameras.firstOrNull()
-        if (main != null) {
-            result += LensOption(LensKind.MAIN, main.first, main.second, isFront = false)
+        // --- hátlapi: a fő logikai kamera + a mögötte lévő fizikai optikák ---
+        val backId = manager.cameraIdList.firstOrNull { id ->
+            manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING) ==
+                CameraCharacteristics.LENS_FACING_BACK
+        }
 
-            backCameras.drop(1)
-                .filter { it.second < main.second * 0.8f }
-                .minByOrNull { it.second }
-                ?.let { result += LensOption(LensKind.ULTRA_WIDE, it.first, it.second, false) }
+        if (backId != null) {
+            val backCharacteristics = manager.getCameraCharacteristics(backId)
+            val mainFocal = focalOf(backCharacteristics) ?: 1f
 
-            backCameras.drop(1)
-                .filter { it.second > main.second * 1.4f }
-                .maxByOrNull { it.second }
-                ?.let { result += LensOption(LensKind.TELE, it.first, it.second, false) }
+            result += LensOption(LensKind.MAIN, backId, mainFocal, isFront = false, zoomRatio = 1f)
+
+            // A fizikai alkamerák API 28-tól kérdezhetők le.
+            val physicalFocals = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                backCharacteristics.physicalCameraIds.mapNotNull { physicalId ->
+                    runCatching { focalOf(manager.getCameraCharacteristics(physicalId)) }.getOrNull()
+                }
+            } else {
+                emptyList()
+            }
+
+            // A fő optika fókusztávolsága a fizikai lencsék közül a „középső":
+            // amelyikhez az 1× tartozik. Ha a rendszer nem adott vissza
+            // fizikai kamerákat, marad az egyetlen, fő lencse.
+            val reference = physicalFocals.minByOrNull { kotlin.math.abs(it - mainFocal) } ?: mainFocal
+
+            physicalFocals.minOrNull()
+                ?.takeIf { it < reference * 0.8f }
+                ?.let { focal ->
+                    result += LensOption(
+                        LensKind.ULTRA_WIDE, backId, focal, isFront = false,
+                        zoomRatio = focal / reference,
+                    )
+                }
+
+            physicalFocals.maxOrNull()
+                ?.takeIf { it > reference * 1.4f }
+                ?.let { focal ->
+                    result += LensOption(
+                        LensKind.TELE, backId, focal, isFront = false,
+                        zoomRatio = focal / reference,
+                    )
+                }
         }
 
         result.sortedBy { it.kind.ordinal }
     }.onFailure { Log.w(TAG, "Lencse-felderítés hiba: ${it.message}") }
         .getOrDefault(emptyList())
+
+    /** A legrövidebb elérhető fókusztávolság — ez jellemzi az adott optikát. */
+    private fun focalOf(characteristics: CameraCharacteristics): Float? =
+        characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)?.minOrNull()
 
     private fun qualityFor(settings: Settings) = when {
         settings.resolution.height >= 2160 -> Quality.UHD
@@ -368,6 +457,9 @@ class CameraSource(
 
     companion object {
         private const val TAG = "OnLIVE/Camera"
+
+        /** Előnézet közben ennyi időnként konvertálunk egy képkockát (~2 fps). */
+        private const val PREVIEW_FRAME_INTERVAL_MS = 500L
         private val TIMESTAMP = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     }
 }

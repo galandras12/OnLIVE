@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.012** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.013** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -166,3 +166,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.010`](CHANGELOG.md#10010--stream-key-on-the-web-connection-settings-on-the-phone) | — | Stream key on the web, connection settings on the phone |
 | [`1.0.011`](CHANGELOG.md#10011--configurable-server-port-new-default-8080) | — | Configurable server port, new default 8080 |
 | [`1.0.012`](CHANGELOG.md#10012--startbat-fixed-the-vanishing-window-added-step-by-step-output) | — | start.bat: fixed the vanishing window, step-by-step output |
+| [`1.0.013`](CHANGELOG.md#10013--camera-preview-and-lens-switching-actually-work) | — | Camera preview and lens switching actually work |

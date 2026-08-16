@@ -19,7 +19,7 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.ScreenShare
+import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
@@ -284,7 +284,7 @@ private fun SourceAndLensRow(
                 label = { Text(if (source == CaptureSource.CAMERA) "Kamera" else "Képernyő") },
                 leadingIcon = {
                     Icon(
-                        if (source == CaptureSource.CAMERA) Icons.Default.Cameraswitch else Icons.Default.ScreenShare,
+                        if (source == CaptureSource.CAMERA) Icons.Default.Cameraswitch else Icons.AutoMirrored.Filled.ScreenShare,
                         contentDescription = null,
                     )
                 },

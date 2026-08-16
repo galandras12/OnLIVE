@@ -147,22 +147,33 @@ Service + wakelock + akku-kizárás adja; a PIP csak vizuális visszajelzés.
 A képkockák útja: `ImageAnalysis` → `ImageProxyConverter.toI420()` →
 `VideoFrame` → `FrameFanout` → WebRTC `VideoSource`.
 
-**Lencse-választás.** Nem hardcode-olt kamera-id-k, hanem Camera2 metaadatok
-alapján (`stream/CameraSource.enumerateLenses()`):
+**Lencse-választás (1.0.013-tól zoom-aránnyal).**
 
-| Kategória | Szabály |
+A korábbi megoldás a `cameraIdList`-ből próbálta kigyűjteni a fizikai lencséket,
+és `Camera2CameraInfo.cameraId` szerint szűrt. Ez modern telefonokon **nem
+működik**: a hátlapi optikák egyetlen *logikai* kamera mögött vannak, a
+`cameraIdList` csak azt az egyet adja vissza, a tele és a nagylátószögű pedig
+fizikai alkamera. Az azonosítós szűrő így mindig üresre futott, a tartalék ág
+ugyanazt a kamerát adta vissza, és a váltás **némán elmaradt** — Galaxy S26
+Ultrán is pontosan ez történt.
+
+A mostani megoldás (`stream/CameraSource.enumerateLenses()`):
+
+| Lépés | Hogyan |
 |---|---|
-| Előlapi | `LENS_FACING_FRONT` |
-| Fő | a `cameraIdList` első hátlapi eleme (konvenció szerint ez a fő) |
-| Nagylátószögű | hátlapi, fókusztávolsága < fő × 0,8 (a legkisebb) |
-| Tele | hátlapi, fókusztávolsága > fő × 1,4 (a legnagyobb) |
+| Felderítés | a hátlapi logikai kamera `getPhysicalCameraIds()` listája (API 28+), és mindegyik fókusztávolsága |
+| Besorolás | a fő optikához képest rövidebb fókusz → nagylátószögű, hosszabb → tele |
+| Váltás | **zoom-arány** (`fókusz / fő fókusz`, pl. 17 mm / 6,4 mm ≈ 2,7×), a kamera tényleges `zoomState` tartományára vágva |
+| Elő ↔ hátlapi | `CameraSelector.DEFAULT_FRONT_CAMERA` / `DEFAULT_BACK_CAMERA` — ez tényleg külön kamera |
 
 Csak a ténylegesen létező lencsék jelennek meg chipként az UI-n.
 
-**Élő lencseváltás:** a Camera2 session lencsénként külön, ezért a CameraX-nek
-újra kell kötnie → jellemzően **300–800 ms kép-kiesés**. A WebRTC session
-viszont NEM szakad meg: ugyanaz a `VideoSource` és ugyanaz a `PeerConnection`
-marad, csak pár képkocka nem érkezik. A szerver oldali állapot végig `live`.
+**Élő lencseváltás.** Azonos oldalon belül (fő ↔ tele ↔ nagylátószögű) **nincs
+újrakötés**: csak a zoom-arány áll át, amitől a rendszer maga vált fizikai
+optikát — a váltás azonnali, egyetlen képkocka sem esik ki. Oldalváltásnál
+(elő ↔ hátlapi) új Camera2 session kell, ott marad a **300–800 ms kép-kiesés**.
+A WebRTC session egyik esetben sem szakad meg: ugyanaz a `VideoSource` és
+`PeerConnection` marad, a szerver oldali állapot végig `live`.
 
 ### 2.2 Képernyő (MediaProjection)
 
@@ -198,6 +209,28 @@ SDP és a WHIP session érintetlen — a szerver oldalon nincs szakadás.
   A `StreamService.ensureEngine()` ezt kezeli — session közben nem fordulhat elő.
 - **Bitráta** (32/64/96/128 kbps): SDP-szinten, az Opus `maxaveragebitrate`
   paraméterén keresztül (`webrtc/SdpUtils.setOpusBitrate`).
+
+---
+
+## 3.1 Kamera-előnézet (1.0.013)
+
+A capture a Service-ben él, hogy az adás túlélje az appváltást — ez viszont
+sokáig azt is jelentette, hogy a kamera **csak a „Kezdés"-re indult el**.
+Következmény: az app megnyitásakor fekete kép, és mivel a `cameraSource` addig
+`null` volt, a lencseváltás, a vaku és a fotó gomb sem csinált semmit.
+
+Mostantól külön előnézeti mód van:
+
+| Mikor | Mi történik |
+|---|---|
+| az Activity láthatóvá válik (`onStart`) | `ACTION_PREVIEW` → a Service elindítja a kamerát, adás **nélkül** |
+| a felhasználó „Kezdés"-t nyom | a meglévő kamera mellé felépül a WHIP kapcsolat |
+| az Activity eltűnik (`onStop`) | `ACTION_PREVIEW_STOP` → ha **nem** megy adás, a kamera elengedve; adás közben figyelmen kívül hagyva |
+
+Előnézet közben a képkocka-konverzió **ritkított** (~2 fps): a WebRTC oldali
+fogadó ilyenkor `null`, tehát a YUV → I420 átalakítás eredményét úgyis eldobnánk
+— 1080p30-nál ez folyamatos, felesleges CPU- és akkumulátor-terhelés lenne. A
+ritkított képkockára a „kép mentése" gombnak van szüksége.
 
 ---
 

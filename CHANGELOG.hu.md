@@ -12,6 +12,61 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.013 — Végre van kamerakép, és a lencseváltás is működik
+
+*2026-08-16*
+
+Három tünet egy Galaxy S26 Ultrán, egy közös gyökérrel — plusz egy külön hiba.
+Mindkettő az appban volt.
+
+### Fekete előnézet, néma lencsegombok
+
+A capture a Service-ben él, hogy az adás túlélje az appváltást. A kamerát
+viszont **kizárólag a „Kezdés"** indította el, tehát az app megnyitásakor
+egyáltalán nem volt bekötött kamera: a kép fekete maradt, és mivel a
+`cameraSource` addig `null` volt, a lencsegombok, a vaku és a fotó gomb sem
+csinált semmit.
+
+Mostantól van előnézeti mód: a Service elindítja a kamerát, amikor az Activity
+láthatóvá válik (`ACTION_PREVIEW`), és elengedi, amikor eltűnik — kivéve, ha
+megy az adás, olyankor érintetlenül streamel tovább. A „Kezdés" már csak a WHIP
+kapcsolatot építi fel a **már futó** kamera mellé.
+
+Előnézet közben a képkocka-konverzió ritkított (~2 fps): a WebRTC oldali fogadó
+ilyenkor `null`, tehát az 1080p30-as YUV → I420 átalakítás eredményét úgyis
+eldobnánk — csak a CPU-t és az akkumulátort enné. A ritkított képkockára a
+„kép mentése" gombnak van szüksége.
+
+### Nem lehetett optikát váltani
+
+A lencse-felderítés a `cameraIdList`-et járta be, majd a CameraX kameráit
+`Camera2CameraInfo.cameraId` szerint szűrte. Modern telefonokon viszont a
+hátlapi optikák **egyetlen logikai kamera** mögött vannak: a `cameraIdList` csak
+azt az egyet adja vissza, a tele és a nagylátószögű pedig *fizikai* alkamera,
+amelyek azonosítóját a CameraX sosem jelenti. A szűrő így mindig üresre futott,
+a tartalék ág ugyanazt a kamerát adta vissza, a váltás pedig némán elmaradt.
+
+Mostantól a fizikai alkamerák a `getPhysicalCameraIds()`-ből jönnek (API 28+),
+fókusztávolság szerint besorolva, a váltás pedig **zoom-aránnyal** történik
+(fókusz ÷ fő fókusz, a kamera valós zoom-tartományára vágva) — így választ a
+rendszer fizikai optikát. Az elő ↔ hátlapi váltás maradt `CameraSelector`, mert
+az tényleg külön kamera.
+
+Kellemes mellékhatás: a hátlapi optikák közti váltás már nem jár újrakötéssel,
+tehát azonnali — nem esik ki 300–800 ms kép.
+
+### Fordítási figyelmeztetések
+
+`Icons.Filled.ArrowBack` / `ScreenShare` → az `AutoMirrored` változatokra, és
+kikerült az `@OptIn(ExperimentalCamera2Interop::class)`, amit a mai CameraX már
+nem kér (a fordító is jelezte, hogy nincs hatása).
+
+> Csak olvasással és statikus ellenőrzéssel igazolva — ebben a környezetben
+> nincs Android SDK, tehát a fordítást és az eszközön mutatott viselkedést a te
+> gépeden kell kipróbálni.
+
+---
+
 ## 1.0.012 — start.bat: az eltűnő ablak javítása, lépésenkénti kiírás
 
 *2026-08-16*
