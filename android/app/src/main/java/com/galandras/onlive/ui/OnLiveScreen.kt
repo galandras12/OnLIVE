@@ -58,6 +58,7 @@ import com.galandras.onlive.settings.LensKind
 import com.galandras.onlive.settings.Settings
 import com.galandras.onlive.settings.StreamOrientation
 import com.galandras.onlive.stream.ConnectionState
+import com.galandras.onlive.stream.LinkStatus
 import com.galandras.onlive.stream.StreamBus
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -135,6 +136,14 @@ fun OnLiveScreen(
                                 Card(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                                     Text(error, Modifier.padding(12.dp), color = Live, fontSize = 13.sp)
                                 }
+                            }
+
+                            // Kölcsönös kapcsolat-visszajelzés (1.0.102): külön
+                            // sor a vezérlésnek, a publishnek és annak, amit a
+                            // szerver lát. Készenlétben nincs mit mutatni.
+                            if (state.connection != ConnectionState.IDLE) {
+                                LinkPanel(state.link)
+                                Spacer(Modifier.height(12.dp))
                             }
 
                             QuickActions(
@@ -271,6 +280,52 @@ private fun StatusBar(
 
         IconButton(onClick = onSettings) {
             Icon(Icons.Default.Settings, contentDescription = "Beállítások", tint = Color.White)
+        }
+    }
+}
+
+/**
+ * A három kapcsolati láb állapota (1.0.102).
+ *
+ * MIÉRT KELL: a szerver „látta a csatlakozást", a telefon meg végtelen
+ * újracsatlakozást írt — és semmi nem árulta el, melyik láb áll. A vezérlés,
+ * a publish és a szerver által LÁTOTT kép három külön dolog; bármelyik lehet
+ * hibás úgy, hogy a másik kettő tökéletes.
+ */
+@Composable
+private fun LinkPanel(link: LinkStatus) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                if (link.allOk) "Kapcsolat: mindkét oldalon rendben" else "Kapcsolat",
+                color = if (link.allOk) Ok else Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+            )
+
+            LinkRow("Vezérlő szerver", link.controlOk, link.controlDetail)
+            LinkRow("WHIP publish", link.whipOk, link.whipDetail)
+            LinkRow("A szerver lát minket", link.serverSeesMedia, link.serverDetail)
+
+            if (link.route.isNotBlank()) {
+                Text(link.route, color = Color(0xFF9CA3AF), fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LinkRow(label: String, ok: Boolean, detail: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(8.dp)
+                .background(if (ok) Ok else Live, RoundedCornerShape(50)),
+        )
+        Spacer(Modifier.size(8.dp))
+        Column {
+            Text(label, color = Color.White, fontSize = 12.sp)
+            Text(detail, color = Color(0xFF9CA3AF), fontSize = 11.sp)
         }
     }
 }

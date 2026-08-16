@@ -12,6 +12,71 @@ mapping between the two.
 
 ---
 
+## 1.0.102 — mutual feedback: which leg is down, and why
+
+*2026-08-16*
+
+There was a state where the server **saw the connection** while the phone kept
+printing "Reconnecting… (#1)" forever. And nothing said what was wrong.
+
+The cause is structural: the system has **three separate connections**, and any
+one of them can be down while the other two are perfect.
+
+| Leg | What travels on it | What it proves |
+|---|---|---|
+| Control server | `POST /api/session/*` to port 8080 | the address and stream key are right |
+| WHIP publish | SDP + media to MediaMTX (8889) | the *picture* can get up |
+| What the server SEES | the server's ack in every response | whether media actually **arrives** |
+
+Until now only the end result was visible. All three now have their own line on
+the main screen — a dot and a sentence each.
+
+### The server's ack
+
+Every phone request (`start`, `resume`, `stats`, `ping`) returns an `ack` object
+describing what the server sees — from the MediaMTX API, not from optimism:
+
+```json
+{ "state": "live",
+  "ingest": { "available": true, "flowing": false, "stalled": false, "tracks": 0 } }
+```
+
+This is the third leg, and it is the one that was missing: a successful HTTP
+response does **not** mean the broadcast is running. WHIP signalling can pass
+through the tunnel while the WebRTC media never arrives — and the phone had no
+way to tell those two apart.
+
+### The reason is visible too
+
+The publish error used to exist only in logcat; the UI showed a silent
+"Reconnecting…". The WHIP line now prints the HTTP status and the message.
+
+**404/405** got its own sentence, because that is not a network hiccup but a
+wrong address:
+
+> The WHIP address does not exist on this server (HTTP 404): … — the ingest
+> address must point at MediaMTX's WHIP port (8889 by default), not at the
+> control server.
+
+That is exactly the case described in 1.0.019: cloudflared does not strip path
+prefixes, so a `…/ingest/onlive/whip` address arrives at the control server on
+8080, where there is no WHIP endpoint.
+
+### A small annoyance
+
+"Retrying in **0 s** (#1)" — the first backoff can be 800 ms because of the ±20%
+jitter, and integer division made that zero. It now rounds up, so the smallest
+value shown is 1 s.
+
+### Tests
+
+5 new tests (225 → 230). The ack is measured through a real HTTP server:
+`flowing` reflects the actual ingest state, stalled data is its own signal,
+`start` and `ping` acknowledge too — and a wrong stream key returns 401 with no
+ack at all, so no internal state leaks without authentication.
+
+---
+
 ## 1.0.101 — portrait and landscape, a lens slider, and a local route
 
 *2026-08-16*

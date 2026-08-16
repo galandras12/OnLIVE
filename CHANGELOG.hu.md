@@ -12,6 +12,71 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.102 — kölcsönös visszajelzés: melyik láb áll, és miért
+
+*2026-08-16*
+
+Volt egy állapot, amiben a szerver **látta a csatlakozást**, a telefon viszont
+végtelenül azt írta: „Újracsatlakozás… (#1)". És semmi nem árulta el, mi a baj.
+
+Az ok szerkezeti: a rendszernek **három külön kapcsolata** van, és bármelyik
+állhat úgy, hogy a másik kettő hibátlan.
+
+| Láb | Mi megy rajta | Mit bizonyít |
+|---|---|---|
+| Vezérlő szerver | `POST /api/session/*` a 8080-ra | a cím és a streamkulcs jó |
+| WHIP publish | SDP + média a MediaMTX-hez (8889) | a *kép* fel tud menni |
+| Amit a szerver LÁT | a szerver nyugtája minden válaszban | tényleg **érkezik-e** kép |
+
+Eddig csak a végeredmény látszott. Mostantól mindhárom külön sorban áll a
+főképernyőn — ponttal és szöveggel.
+
+### A szerver nyugtája
+
+Minden telefon-kérés válasza (`start`, `resume`, `stats`, `ping`) hoz egy `ack`
+objektumot arról, hogy a szerver **mit lát** — a MediaMTX API-jából, nem hitből:
+
+```json
+{ "state": "live",
+  "ingest": { "available": true, "flowing": false, "stalled": false, "tracks": 0 } }
+```
+
+Ez a harmadik láb, és pont ez hiányzott: a sikeres HTTP válasz **nem** jelenti
+azt, hogy megy az adás. A WHIP jelzés átmehet az alagúton úgy, hogy a WebRTC
+média nem ér célba — a telefon eddig ezt a két esetet nem tudta
+megkülönböztetni.
+
+### A hiba oka is látszik
+
+A publish hibája korábban csak a logcatben volt meg; a felületen egy néma
+„Újracsatlakozás…" maradt. Mostantól a WHIP sor kiírja a HTTP kódot és az
+üzenetet.
+
+A **404/405** külön mondatot kapott, mert az nem hálózati zökkenő, hanem
+címhiba:
+
+> A WHIP cím nem létezik ezen a szerveren (HTTP 404): … — az ingest címnek a
+> MediaMTX WHIP portjára (alapból 8889) kell mutatnia, nem a vezérlő szerverre.
+
+Ez pontosan az 1.0.019-ben leírt eset: a cloudflared nem vág le
+útvonal-előtagot, tehát egy `…/ingest/onlive/whip` alakú cím a 8080-as vezérlő
+szerverhez érkezik meg, ahol nincs WHIP végpont.
+
+### Apróság, ami zavaró volt
+
+„Újra **0 mp** múlva (#1)" — az első backoff 800 ms is lehet a ±20% jitter
+miatt, az egész osztás pedig 0-t adott. Felfelé kerekítünk, tehát a legkisebb
+kiírt érték 1 mp.
+
+### Tesztek
+
+5 új teszt (225 → 230). A nyugta egy igazi HTTP szerveren keresztül mérve: a
+`flowing` a valós ingest-állapotot tükrözi, a megállt adat külön jelzés, a
+`start` és a `ping` is nyugtázik — és rossz streamkulccsal 401 jön, nyugta
+nélkül, hogy hitelesítés nélkül semmilyen belső állapot ne szivárogjon ki.
+
+---
+
 ## 1.0.101 — álló és fekvő adás, lencse-csúszka, helyi útvonal
 
 *2026-08-16*

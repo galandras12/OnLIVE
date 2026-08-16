@@ -69,6 +69,22 @@ class WhipClient(
                             "Ellenőrizd a beállításokban megadott kulcsot."
                     )
                 }
+                // A 404/405 nem hálózati zökkenő, hanem CÍMHIBA: ezen a
+                // szerveren nincs WHIP végpont. Tipikus ok, hogy az ingest cím
+                // a vezérlő szerverre mutat a MediaMTX helyett — a cloudflared
+                // ugyanis nem vág le útvonal-előtagot, tehát a
+                // `.../ingest/onlive/whip` kérés a 8080-ra érkezik meg.
+                // Újrapróbálkozni ettől még van értelme (a MediaMTX épp
+                // újraindulhat), de a hibaüzenetnek meg kell mondania az okot —
+                // enélkül csak egy néma, végtelen újracsatlakozás látszik
+                // (1.0.102).
+                if (response.code == 404 || response.code == 405) {
+                    throw IOException(
+                        "A WHIP cím nem létezik ezen a szerveren (HTTP ${response.code}): $whipUrl — " +
+                            "az ingest címnek a MediaMTX WHIP portjára (alapból 8889) kell mutatnia, " +
+                            "nem a vezérlő szerverre.",
+                    )
+                }
                 if (!response.isSuccessful) {
                     throw IOException("WHIP publish sikertelen: HTTP ${response.code} — $body")
                 }

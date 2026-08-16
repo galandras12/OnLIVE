@@ -347,6 +347,36 @@ A beállítások alján az alkalmazás neve és verziója áll, a `BuildConfig`-
 (`versionName` / `versionCode`), nem a felületre írt szövegként — így a kiadás
 verziószáma egyetlen helyen él, a `app/build.gradle.kts`-ben.
 
+## 4.5 Kölcsönös kapcsolat-visszajelzés (1.0.102)
+
+A rendszernek **három külön kapcsolata** van, és bármelyik állhat úgy, hogy a
+másik kettő hibátlan:
+
+| Láb | Mi megy rajta | Mit bizonyít |
+|---|---|---|
+| Vezérlő szerver | `POST /api/session/*` HTTP-n a 8080-ra | a cím és a streamkulcs jó |
+| WHIP publish | SDP + média a MediaMTX-hez (8889) | a *kép* fel tud menni |
+| Amit a szerver LÁT | a szerver `ack`-je minden válaszban | tényleg **érkezik-e** kép |
+
+Ezért ír a szerver minden telefon-válaszba egy `ack` objektumot a saját
+nézetéről (a MediaMTX API-jából, nem hitből):
+
+```json
+{ "at": "…", "state": "live",
+  "ingest": { "available": true, "flowing": false, "stalled": false, "tracks": 0 } }
+```
+
+A telefon ezt a főképernyőn három sorban mutatja, ponttal és szöveggel. A
+harmadik sor az, ami eddig hiányzott: a sikeres HTTP válasz **nem** jelenti azt,
+hogy megy az adás — a WHIP jelzés átmehet az alagúton úgy, hogy a WebRTC média
+nem ér célba.
+
+Ugyanígy látszik a **hiba oka** is. Korábban a publish hibája csak a logcatben
+volt meg, a felületen egy néma „Újracsatlakozás…" maradt; most a WHIP sor
+kiírja a HTTP kódot és az üzenetet. A 404/405 külön mondatot kap, mert az nem
+hálózati zökkenő, hanem címhiba: az ingest cím a vezérlő szerverre mutat a
+MediaMTX helyett.
+
 ---
 
 ## 5. WHIP publish

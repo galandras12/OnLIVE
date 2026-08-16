@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.galandras.onlive.net.ControlApi
 import com.galandras.onlive.net.RemoteCommand
+import com.galandras.onlive.net.ServerAck
 import com.galandras.onlive.settings.AppSettings
 import com.galandras.onlive.settings.AudioBitrate
 import com.galandras.onlive.settings.AudioSampleRate
@@ -137,7 +138,20 @@ class StreamService : LifecycleService() {
 
         // Az app itt CSAK annyit mond: "elkezdtem". Hogy ebből intro lesz-e,
         // azt kizárólag a szerver állapotgépe dönti el (4. szegmens).
+        //
+        // A válasz egyben az ELSŐ visszajelzés is arról, hogy a vezérlő út él
+        // (1.0.102) — ha ez sikerül, de a publish nem, akkor tudjuk, hogy nem
+        // a cím vagy a kulcs a baj, hanem a médiaút.
         controlApi.sessionStart(settings)
+            .onSuccess {
+                StreamBus.updateLink { it.copy(controlOk = true, controlDetail = "session elindítva") }
+                applyAck(controlApi.lastAck)
+            }
+            .onFailure { error ->
+                StreamBus.updateLink {
+                    it.copy(controlOk = false, controlDetail = error.message ?: "nem válaszol")
+                }
+            }
 
         connectWithRetry(settings)
     }
@@ -200,7 +214,7 @@ class StreamService : LifecycleService() {
         controlApi.sessionEnd(settings)
 
         StreamBus.setConnection(ConnectionState.IDLE)
-        StreamBus.update { it.copy(stats = StreamStats(), torchOn = false) }
+        StreamBus.update { it.copy(stats = StreamStats(), torchOn = false, link = LinkStatus()) }
 
         ServiceCompat.stopForeground(this@StreamService, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -261,12 +275,16 @@ class StreamService : LifecycleService() {
                     Log.i(TAG, "Publish útvonal: ${route.reason} (${route.whip})")
                     StreamBus.setMessage(route.reason)
                 }
+                StreamBus.updateLink { it.copy(route = route.reason) }
 
                 val result = runCatching { engine?.publish(settings, route.whip) }
 
                 if (result.isSuccess) {
                     StreamBus.setConnection(ConnectionState.LIVE)
                     StreamBus.update { it.copy(reconnectAttempt = 0, nextRetryInSeconds = 0) }
+                    StreamBus.updateLink {
+                        it.copy(whipOk = true, whipDetail = "publish él — ${route.whip}")
+                    }
                     startStatsLoop(settings)
                     return@launch
                 }
@@ -275,6 +293,9 @@ class StreamService : LifecycleService() {
                 if (error is WhipClient.FatalWhipException) {
                     Log.e(TAG, "Végleges WHIP hiba: ${error.message}")
                     userWantsLive = false
+                    StreamBus.updateLink {
+                        it.copy(whipOk = false, whipDetail = error.message ?: "végleges WHIP hiba")
+                    }
                     StreamBus.setConnection(ConnectionState.ERROR, error.message)
                     releaseWakeLock()
                     return@launch
@@ -284,11 +305,19 @@ class StreamService : LifecycleService() {
                 val backoffMs = backoffMillis(attempt)
                 Log.w(TAG, "Csatlakozás sikertelen (#$attempt): ${error?.message}; újra ${backoffMs}ms múlva")
 
+                // A HIBA OKA is látszódjon, ne csak az, hogy „Újracsatlakozás…".
+                // Enélkül a felhasználó azt látja, hogy a szerver észleli a
+                // kapcsolatot, a telefon meg végtelenül próbálkozik — és semmi
+                // nem árulja el, melyik láb és miért nem áll (1.0.102).
+                val reason = error?.message?.takeIf { it.isNotBlank() } ?: "ismeretlen hiba"
+                StreamBus.updateLink { it.copy(whipOk = false, whipDetail = reason) }
+
                 StreamBus.update {
                     it.copy(
                         connection = ConnectionState.RECONNECTING,
                         reconnectAttempt = attempt,
-                        nextRetryInSeconds = (backoffMs / 1000).toInt(),
+                        // Felfelé kerekítünk: 800 ms-ból „1 mp" lesz, nem „0 mp".
+                        nextRetryInSeconds = ((backoffMs + 999) / 1000).toInt(),
                     )
                 }
 
@@ -298,7 +327,7 @@ class StreamService : LifecycleService() {
                     val step = min(1000L, remaining)
                     delay(step)
                     remaining -= step
-                    StreamBus.update { it.copy(nextRetryInSeconds = (remaining / 1000).toInt()) }
+                    StreamBus.update { it.copy(nextRetryInSeconds = ((remaining + 999) / 1000).toInt()) }
                 }
             }
         }
@@ -320,9 +349,53 @@ class StreamService : LifecycleService() {
                 StreamBus.update { it.copy(stats = stats) }
                 controlApi
                     .sessionStats(settings, stats, StreamBus.state.value.connection.name.lowercase())
-                    .onSuccess { commands -> commands.forEach { handleRemoteCommand(it) } }
+                    .onSuccess { reply ->
+                        // A vezérlő út él — ezt a sikeres válasz bizonyítja.
+                        StreamBus.updateLink {
+                            it.copy(controlOk = true, controlDetail = "válaszol (${STATS_INTERVAL_MS / 1000} mp-enként)")
+                        }
+                        applyAck(reply.ack)
+                        reply.commands.forEach { handleRemoteCommand(it) }
+                    }
+                    .onFailure { error ->
+                        // A vezérlés esett ki, nem a média. Ez külön hiba: a
+                        // publish ilyenkor akár tökéletesen mehet tovább.
+                        StreamBus.updateLink {
+                            it.copy(
+                                controlOk = false,
+                                controlDetail = error.message ?: "nem válaszol",
+                                serverSeesMedia = false,
+                                serverDetail = "nincs friss visszajelzés a szervertől",
+                            )
+                        }
+                    }
             }
         }
+    }
+
+    /**
+     * A szerver nyugtájának feldolgozása (1.0.102).
+     *
+     * Ez a harmadik láb: nem az, hogy MI mit gondolunk, hanem hogy a szerver
+     * mit LÁT. A kettő szétválhat — publish sikeres, média mégsem érkezik (a
+     * WHIP jelzés átment az alagúton, a WebRTC média viszont nem) —, és pont
+     * ez az az eset, amit eddig semmi nem mutatott meg.
+     */
+    private fun applyAck(ack: ServerAck?) {
+        if (ack == null) {
+            StreamBus.updateLink {
+                it.copy(serverSeesMedia = false, serverDetail = "a szerver nem küldött nyugtát")
+            }
+            return
+        }
+
+        val detail = when {
+            ack.ingestFlowing -> "érkezik a kép (${ack.tracks} sáv, állapot: ${ack.state})"
+            ack.ingestStalled -> "az útvonal él, de MEGÁLLT az adat — a média nem ér célba"
+            ack.ingestAvailable -> "az útvonal létezik, de még nincs adat"
+            else -> "a szerverhez NEM érkezik kép (állapot: ${ack.state})"
+        }
+        StreamBus.updateLink { it.copy(serverSeesMedia = ack.ingestFlowing, serverDetail = detail) }
     }
 
     // -----------------------------------------------------------------------

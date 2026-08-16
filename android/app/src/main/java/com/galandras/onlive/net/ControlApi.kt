@@ -103,6 +103,11 @@ class ControlApi(
         reachable
     }
 
+    /** A legutóbbi nyugta — a Service ebből tudja, mit lát a szerver. */
+    @Volatile
+    var lastAck: ServerAck? = null
+        private set
+
     suspend fun sessionStart(settings: Settings): Result<Unit> =
         post(settings, "start", settingsPayload(settings))
 
@@ -131,7 +136,7 @@ class ControlApi(
         settings: Settings,
         stats: StreamStats,
         state: String,
-    ): Result<List<RemoteCommand>> =
+    ): Result<StatsReply> =
         postForCommands(
             settings,
             "stats",
@@ -173,7 +178,7 @@ class ControlApi(
         settings: Settings,
         endpoint: String,
         body: JSONObject,
-    ): Result<List<RemoteCommand>> = withContext(Dispatchers.IO) {
+    ): Result<StatsReply> = withContext(Dispatchers.IO) {
         runCatching {
             val url = "${resolveEndpoints(settings).control}/api/session/$endpoint"
             val request = Request.Builder()
@@ -188,7 +193,10 @@ class ControlApi(
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("$endpoint → HTTP ${response.code}")
-                parseCommands(response.body?.string())
+                val payload = response.body?.string()
+                val reply = StatsReply(commands = parseCommands(payload), ack = parseAck(payload))
+                reply.ack?.let { lastAck = it }
+                reply
             }
         }.onFailure {
             Log.w(TAG, "session/$endpoint sikertelen: ${it.message}")
@@ -232,6 +240,7 @@ class ControlApi(
                             whipUrl = if (resolved.isLocal) resolved.whip else json.optString("whipUrl", settings.whipUrl),
                             streamPath = json.optString("streamPath", settings.streamPath),
                             route = resolved.reason,
+                            ack = parseAck(body),
                         )
                     }
                     401 -> error("A streamkulcs nem jó. A webes felületen (Streamkulcs fül) hozz létre újat.")
@@ -249,6 +258,29 @@ class ControlApi(
                 }
             }
         }.onFailure { Log.w(TAG, "ping sikertelen: ${it.message}") }
+    }
+
+    /**
+     * A szerver nyugtája: mit lát ŐO (1.0.102).
+     *
+     * A vezérlő hívás sikere csak azt bizonyítja, hogy a HTTP út él. Azt, hogy
+     * a KÉP is megérkezik-e, kizárólag a szerver tudja megmondani — ő kérdezi
+     * a MediaMTX-et. Ezért olvassuk ki minden válaszból.
+     */
+    private fun parseAck(payload: String?): ServerAck? {
+        if (payload.isNullOrBlank()) return null
+        return runCatching {
+            val ack = JSONObject(payload).optJSONObject("ack") ?: return null
+            val ingest = ack.optJSONObject("ingest")
+            ServerAck(
+                state = ack.optString("state", "ismeretlen"),
+                ingestAvailable = ingest?.optBoolean("available") ?: false,
+                ingestFlowing = ingest?.optBoolean("flowing") ?: false,
+                ingestStalled = ingest?.optBoolean("stalled") ?: false,
+                tracks = ingest?.optInt("tracks", 0) ?: 0,
+                at = ack.optString("at", ""),
+            )
+        }.getOrNull()
     }
 
     private fun parseCommands(payload: String?): List<RemoteCommand> {
@@ -307,12 +339,35 @@ class ControlApi(
 }
 
 /** A kapcsolat-teszt eredménye — ezt mutatja a beállítás-képernyő. */
+/**
+ * A szerver saját nézete a kapcsolatról (1.0.102).
+ *
+ * @param ingestFlowing a szerverhez ÉPPEN érkezik-e kép (a MediaMTX API-jából)
+ * @param ingestAvailable létezik-e egyáltalán az útvonal a MediaMTX-ben
+ */
+data class ServerAck(
+    val state: String,
+    val ingestAvailable: Boolean,
+    val ingestFlowing: Boolean,
+    val ingestStalled: Boolean,
+    val tracks: Int,
+    val at: String,
+)
+
+/** A telemetria válasza: parancsok + a szerver nyugtája. */
+data class StatsReply(
+    val commands: List<RemoteCommand> = emptyList(),
+    val ack: ServerAck? = null,
+)
+
 data class PingResult(
     val state: String,
     val whipUrl: String,
     val streamPath: String,
     /** Melyik úton ment a kérés — helyi vagy alagút (1.0.101). */
     val route: String = "",
+    /** Mit lát a szerver (1.0.102). */
+    val ack: ServerAck? = null,
 )
 
 /**

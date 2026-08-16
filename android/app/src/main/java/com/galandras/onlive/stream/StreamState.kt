@@ -50,6 +50,36 @@ data class StreamStats(
     val uptimeSeconds: Long = 0,
 )
 
+/**
+ * Kölcsönös kapcsolat-visszajelzés (1.0.102).
+ *
+ * A rendszernek **három külön** kapcsolata van, és bármelyik állhat úgy, hogy a
+ * másik kettő hibátlan:
+ *
+ *   1. **vezérlés** — HTTP a vezérlő szerverre (gombnyomások, telemetria),
+ *   2. **WHIP publish** — a média feltöltése a MediaMTX-hez,
+ *   3. **amit a szerver LÁT** — érkezik-e onnan nézve tényleg kép.
+ *
+ * Eddig csak a végeredmény látszott („Újracsatlakozás…"), az ok nem. Ez a
+ * három sor mindegyikről külön mond igent vagy nemet, és a hibát szövegesen
+ * is megmutatja — a szerver nézetét is beleértve, amit ő maga küld vissza
+ * minden válaszban.
+ */
+data class LinkStatus(
+    val controlOk: Boolean = false,
+    val controlDetail: String = "még nem próbáltuk",
+    val whipOk: Boolean = false,
+    val whipDetail: String = "még nem próbáltuk",
+    /** A szerver saját válasza: érkezik-e hozzá kép. */
+    val serverSeesMedia: Boolean = false,
+    val serverDetail: String = "nincs visszajelzés",
+    /** Melyik úton megyünk (helyi vagy alagút) — 1.0.101. */
+    val route: String = "",
+) {
+    /** Minden rendben: mindhárom láb áll. */
+    val allOk: Boolean get() = controlOk && whipOk && serverSeesMedia
+}
+
 data class StreamUiState(
     val connection: ConnectionState = ConnectionState.IDLE,
     val source: CaptureSource = CaptureSource.CAMERA,
@@ -62,6 +92,7 @@ data class StreamUiState(
     val nextRetryInSeconds: Int = 0,
     val message: String? = null,
     val errorMessage: String? = null,
+    val link: LinkStatus = LinkStatus(),
 )
 
 /**
@@ -101,4 +132,7 @@ object StreamBus {
     }
 
     fun setMessage(text: String?) = update { it.copy(message = text) }
+
+    /** Egy-egy láb állapotának frissítése (1.0.102). */
+    fun updateLink(block: (LinkStatus) -> LinkStatus) = update { it.copy(link = block(it.link)) }
 }

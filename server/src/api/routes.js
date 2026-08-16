@@ -30,11 +30,42 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   const session = Router();
   session.use(phoneAuth(config, logger, limiter, streamKeys));
 
+  /**
+   * Nyugta a telefonnak — mit lát ÉPPEN a szerver (1.0.102).
+   *
+   * MIÉRT KELL: eddig a telefon csak azt tudta, hogy a saját kérése átment-e.
+   * Azt nem, hogy a szerverhez megérkezik-e a KÉP. Ez a kettő pedig teljesen
+   * külön út: a vezérlő hívások HTTP-n mennek a 8080-ra, a média WHIP-en a
+   * MediaMTX-hez — az egyik mehet hibátlanul, miközben a másik semmit nem
+   * szállít. Pontosan ez volt az az állapot, ahol a szerver „látta a
+   * csatlakozást", a telefon meg végtelen újracsatlakozást írt.
+   *
+   * Ezért minden telefon-kérés válasza hozza a szerver saját nézetét, és a
+   * telefon ezt ki is írja. Így mindkét fél ugyanazt az igazságot mutatja.
+   */
+  const sessionAck = () => {
+    const snapshot = controller.snapshot();
+    return {
+      at: new Date().toISOString(),
+      state: snapshot.state,
+      /** A szerver LÁTJA-e a bejövő adást (a MediaMTX API-jából, nem hitből). */
+      ingest: {
+        available: snapshot.ingest.available,
+        flowing: snapshot.ingest.flowing,
+        stalled: snapshot.ingest.stalled,
+        tracks: snapshot.ingest.tracks,
+        lastChangeAt: snapshot.ingest.lastChangeAt,
+      },
+      streamPath: config.ingest.path,
+      whipUrl: `${config.publicUrls.ingest}/${config.ingest.path}/whip`,
+    };
+  };
+
   session.post('/start', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
     commands.touch({ device: req.body?.device, capture: req.body });
     const result = controller.send(Events.SESSION_START, {}, Source.PHONE, clientId(req));
-    res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
+    res.json({ ok: true, state: result.snapshot.state, changed: result.changed, ack: sessionAck() });
   });
 
   session.post('/pause', (req, res) => {
@@ -45,7 +76,7 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   session.post('/resume', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
     const result = controller.send(Events.SESSION_RESUME, {}, Source.PHONE, clientId(req));
-    res.json({ ok: true, state: result.snapshot.state, changed: result.changed });
+    res.json({ ok: true, state: result.snapshot.state, changed: result.changed, ack: sessionAck() });
   });
 
   session.post('/end', (req, res) => {
@@ -87,7 +118,7 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   session.post('/stats', (req, res) => {
     controller.updateStats(req.body ?? {});
     commands.touch();
-    res.json({ ok: true, commands: commands.pull() });
+    res.json({ ok: true, commands: commands.pull(), ack: sessionAck() });
   });
 
   /** Külön lekérdezés — ha az app gyorsabb reakciót akar, mint a stats ciklus. */
@@ -113,6 +144,7 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
       ingestUser: config.ingest.user,
       whipUrl: `${config.publicUrls.ingest}/${config.ingest.path}/whip`,
       at: new Date().toISOString(),
+      ack: sessionAck(),
     });
   });
 
