@@ -17,6 +17,7 @@ import { Events } from '../state/machine.js';
 import { DeviceCommands } from '../device/commands.js';
 import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 import { hookAuth, phoneAuth } from './auth.js';
+import { assessPublicUrls } from '../settings/public-urls.js';
 
 export function createRoutes({ config, controller, monitor, store, commands, limiter, streamKeys, adminGuard, logger, startedAt }) {
   const router = Router();
@@ -248,6 +249,11 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
     streamPath: config.ingest.path,
     ingestUser: config.ingest.user,
     whipUrl: `${config.publicUrls.ingest}/${config.ingest.path}/whip`,
+    /**
+     * A címek hibái (1.0.019). A felület ezeket kiírja, mert egy elgépelt
+     * alap-cím a telefonon csak egy 404-nek látszik.
+     */
+    warnings: assessPublicUrls(config.publicUrls),
   }));
 
   admin.get('/transitions', async (req, res) => {

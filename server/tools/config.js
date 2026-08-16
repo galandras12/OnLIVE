@@ -30,6 +30,7 @@ import { assessSecret, generateKey, hashPassword } from '../src/security/passwor
 import { StreamKeyStore, assessStreamKey, generateStreamKey, keyRules } from '../src/security/stream-key.js';
 import { ServerSettingsStore, assessPort } from '../src/settings/store.js';
 import { checkPortDependencies, describeMismatch } from '../src/settings/dependencies.js';
+import { assessPublicUrl, assessPublicUrls } from '../src/settings/public-urls.js';
 import { parseEnvContent, updateEnvContent } from '../src/settings/env-file.js';
 
 /**
@@ -383,11 +384,21 @@ async function main() {
     line();
 
     if (!await askYesNo('Jó így?', { fallback: true })) {
-      urls.ONLIVE_PUBLIC_ADMIN_URL = await ask('Admin URL', { fallback: urls.ONLIVE_PUBLIC_ADMIN_URL });
-      urls.ONLIVE_PUBLIC_LIVE_URL = await ask('Live URL', { fallback: urls.ONLIVE_PUBLIC_LIVE_URL });
-      urls.ONLIVE_PUBLIC_INGEST_URL = await ask('Ingest URL', { fallback: urls.ONLIVE_PUBLIC_INGEST_URL });
+      urls.ONLIVE_PUBLIC_ADMIN_URL = await askUrl('Admin URL', 'admin', urls.ONLIVE_PUBLIC_ADMIN_URL);
+      urls.ONLIVE_PUBLIC_LIVE_URL = await askUrl('Live URL', 'live', urls.ONLIVE_PUBLIC_LIVE_URL);
+      urls.ONLIVE_PUBLIC_INGEST_URL = await askUrl('Ingest URL', 'ingest', urls.ONLIVE_PUBLIC_INGEST_URL);
     }
     Object.assign(updates, urls);
+
+    // A hármas együtt is értelmes kell legyen: az ingest a MediaMTX-re megy,
+    // nem a vezérlő szerverre (1.0.019).
+    for (const problem of assessPublicUrls({
+      admin: urls.ONLIVE_PUBLIC_ADMIN_URL,
+      live: urls.ONLIVE_PUBLIC_LIVE_URL,
+      ingest: urls.ONLIVE_PUBLIC_INGEST_URL,
+    })) {
+      warn(problem.message);
+    }
     summary.push(['Publikus címek', urls.ONLIVE_PUBLIC_ADMIN_URL.replace('admin.', '*.')]);
   } else {
     summary.push(['Publikus címek', urls.ONLIVE_PUBLIC_ADMIN_URL || '(nincs megadva)']);
@@ -552,6 +563,26 @@ async function main() {
 /* ===========================================================================
  *  Részletek
  * ======================================================================== */
+
+/**
+ * Publikus cím bekérése — ALAP-címként.
+ *
+ * A `.../admin` végű érték a leggyakoribb elgépelés, és a legrosszabb fajta:
+ * a telefon a saját útvonalát fűzi hozzá, tehát 404-et kap, miközben minden
+ * más rendben van. Ezért itt fel is ajánljuk a helyes alakot.
+ */
+async function askUrl(question, role, fallback) {
+  for (;;) {
+    const answer = await ask(question, { fallback });
+    const assessment = assessPublicUrl(answer, { role });
+    if (assessment.ok) return assessment.normalized;
+
+    fail(assessment.error);
+    if (assessment.normalized && await askYesNo(`Legyen inkább ${assessment.normalized}?`, { fallback: true })) {
+      return assessment.normalized;
+    }
+  }
+}
 
 /** Jelszó bekérése kétszer, erősség-ellenőrzéssel. */
 async function readPassword() {

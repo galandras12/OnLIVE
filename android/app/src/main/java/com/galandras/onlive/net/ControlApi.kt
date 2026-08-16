@@ -142,8 +142,9 @@ class ControlApi(
             val base = settings.controlBaseUrl.trim().trimEnd('/')
             require(base.isNotBlank()) { "Nincs megadva a vezérlő szerver címe." }
 
+            val pingUrl = "$base/api/session/ping"
             val request = Request.Builder()
-                .url("$base/api/session/ping")
+                .url(pingUrl)
                 .get()
                 .apply {
                     if (settings.streamKey.isNotBlank()) {
@@ -165,7 +166,15 @@ class ControlApi(
                     }
                     401 -> error("A streamkulcs nem jó. A webes felületen (Streamkulcs fül) hozz létre újat.")
                     429 -> error("Túl sok sikertelen próbálkozás — várj egy kicsit.")
-                    404 -> error("A cím elérhető, de nem OnLIVE szerver válaszol (HTTP 404).")
+                    // A leggyakoribb ok NEM az, hogy rossz a szerver: a mezőbe az
+                    // admin OLDAL címe került (`.../admin`), az app pedig ehhez fűzi
+                    // hozzá a saját útvonalát. Ezért mondjuk meg, mit hívtunk meg.
+                    404 -> error(
+                        "A cím elérhető, de ezen az útvonalon nincs OnLIVE szerver (HTTP 404).\n" +
+                            "Meghívott cím: $pingUrl\n" +
+                            "A mezőbe az ALAP-cím kell (pl. https://live.pelda.com), " +
+                            "az /admin rész nélkül.",
+                    )
                     else -> error("A szerver HTTP ${response.code} választ adott.")
                 }
             }

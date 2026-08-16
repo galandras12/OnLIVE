@@ -52,6 +52,46 @@ data class Settings(
         const val DEFAULT_CONTROL_URL = "https://admin.galandras.com"
         const val DEFAULT_STREAM_PATH = "onlive"
         const val DEFAULT_INGEST_USER = "publisher"
+
+        /**
+         * A vezérlő szerver ALAP-címe (1.0.019).
+         *
+         * A mezőbe a webes felület címét szokás bemásolni — `.../admin` végződéssel.
+         * Az app viszont ehhez fűzi hozzá a saját útvonalait, tehát abból
+         * `.../admin/api/session/ping` lenne, amire a szerver **HTTP 404**-et ad:
+         * a cím elérhető, a kulcs jó, mégsem működik semmi. Ez pontosan így
+         * történt egy éles telepítésnél, ezért itt levágjuk.
+         *
+         * Az `/admin` és a `/live` a szerver saját OLDALAI, sosem részei az
+         * alap-címnek. Egyéb útvonalhoz nem nyúlunk: al-útvonalra telepített
+         * (reverse proxy mögötti) szerver esetén az odatartozhat.
+         */
+        fun normalizeControlBase(raw: String): String {
+            var value = raw.trim().trimEnd('/')
+            for (page in listOf("/admin", "/live")) {
+                if (value.endsWith(page, ignoreCase = true)) {
+                    value = value.dropLast(page.length).trimEnd('/')
+                }
+            }
+            return value
+        }
+
+        /**
+         * Az ingest ALAP-címe. Ide a teljes publish cím szokott bekerülni
+         * (`.../onlive/whip`), amiből az app megint csak `.../onlive/whip/onlive/whip`-et
+         * építene.
+         */
+        fun normalizeIngestBase(raw: String, streamPath: String = DEFAULT_STREAM_PATH): String {
+            var value = raw.trim().trimEnd('/')
+            if (value.endsWith("/whip", ignoreCase = true)) {
+                value = value.dropLast("/whip".length).trimEnd('/')
+                val tail = "/" + streamPath.trim('/')
+                if (tail.length > 1 && value.endsWith(tail, ignoreCase = true)) {
+                    value = value.dropLast(tail.length).trimEnd('/')
+                }
+            }
+            return value
+        }
     }
 }
 

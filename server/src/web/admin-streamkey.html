@@ -126,6 +126,13 @@
       <tr><th>Ingest felhasználó</th><td class="mono" id="ingestUser">…</td></tr>
       <tr><th>Streamkulcs</th><td>amit ezen az oldalon létrehoztál</td></tr>
     </table>
+    <p class="hint">
+      A két cím <b>alap-cím</b>: a telefon fűzi hozzá a saját útvonalait
+      (<span class="mono">/api/session/ping</span>, illetve
+      <span class="mono">/&lt;stream&gt;/whip</span>). Ha az
+      <span class="mono">/admin</span> is benne van, a teszt HTTP 404-et ad.
+    </p>
+    <div id="urlWarnings"></div>
   </section>
 
 </main>
@@ -373,6 +380,17 @@
       el('urlIngest').textContent = urls.ingest ?? '–';
       el('streamPath').textContent = urls.streamPath ?? 'onlive';
       el('ingestUser').textContent = urls.ingestUser ?? 'publisher';
+
+      // A címek hibái (1.0.019). Szövegként tesszük be, nem HTML-ként: a
+      // tartalom a .env-ből jön, oda pedig bármi kerülhet.
+      const box = el('urlWarnings');
+      box.textContent = '';
+      for (const problem of urls.warnings ?? []) {
+        const row = document.createElement('p');
+        row.className = problem.level === 'error' ? 'banner missing' : 'banner legacy';
+        row.textContent = `${problem.level === 'error' ? 'HIBA' : 'FIGYELEM'} — ${problem.message}`;
+        box.appendChild(row);
+      }
     }
   })();
 })();

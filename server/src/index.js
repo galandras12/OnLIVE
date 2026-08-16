@@ -37,6 +37,7 @@ import { SessionStore } from './security/sessions.js';
 import { StreamKeyStore } from './security/stream-key.js';
 import { ServerSettingsStore } from './settings/store.js';
 import { checkPortDependencies, describeMismatch } from './settings/dependencies.js';
+import { assessPublicUrls } from './settings/public-urls.js';
 import { RateLimiter } from './security/rate-limit.js';
 import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
@@ -295,7 +296,23 @@ function banner() {
   }[config.portSource]})`);
 
   portReport();
+  publicUrlReport();
   securityReport();
+}
+
+/**
+ * A publikus címek épsége (1.0.019).
+ *
+ * A telefon ezekhez fűzi hozzá a saját útvonalait, ezért egy „/admin" végű
+ * alap-cím nem hibaüzenetet ad, hanem HTTP 404-et a kapcsolat-tesztnél — ami
+ * mindenre gyanakodni enged, csak a címre nem. A fájlból viszont kiolvasható,
+ * tehát induláskor szólunk.
+ */
+function publicUrlReport() {
+  for (const problem of assessPublicUrls(config.publicUrls)) {
+    if (problem.level === 'error') logger.error(problem.message);
+    else logger.warn(problem.message);
+  }
 }
 
 /**

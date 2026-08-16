@@ -102,12 +102,22 @@ fun SettingsScreen(
     var testResult by remember { mutableStateOf<String?>(null) }
     var testOk by remember { mutableStateOf(false) }
 
-    /** A kapcsolati mezők mentése — ezt a teszt is használja. */
+    /**
+     * A kapcsolati mezők mentése — ezt a teszt is használja.
+     *
+     * A két címet mentés előtt alap-címmé alakítjuk (1.0.019): a bemásolt
+     * `.../admin` vagy `.../onlive/whip` végződés levágásra kerül, és a mezőben
+     * is a javított érték marad — hogy látszódjon, mi lett elmentve.
+     */
     suspend fun persistConnection(): Settings {
+        val path = streamPath.trim().trim('/')
+        controlUrl = Settings.normalizeControlBase(controlUrl)
+        ingestUrl = Settings.normalizeIngestBase(ingestUrl, path.ifBlank { Settings.DEFAULT_STREAM_PATH })
+
         appSettings.setEndpoints(
-            ingest = ingestUrl.trim(),
-            control = controlUrl.trim(),
-            path = streamPath.trim().trim('/'),
+            ingest = ingestUrl,
+            control = controlUrl,
+            path = path,
             key = streamKey.trim(),
             ingestUser = ingestUser.trim().ifBlank { Settings.DEFAULT_INGEST_USER },
         )
@@ -185,13 +195,15 @@ fun SettingsScreen(
                         Hint(
                             "Ezek a fix, publikus címek — nem változnak IP-váltáskor vagy " +
                                 "újraindításkor. A vezérlő szerver kapja a gombnyomásokat, az " +
-                                "ingest pedig a képet.",
+                                "ingest pedig a képet.\n\n" +
+                                "Mindkettő ALAP-cím: az /admin és a /<stream>/whip részt az app " +
+                                "teszi hozzá. Ha mégis bemásolod, mentéskor levágom.",
                         )
 
                         OutlinedTextField(
                             value = controlUrl,
                             onValueChange = { controlUrl = it; testResult = null },
-                            label = { Text("Vezérlő szerver (admin)") },
+                            label = { Text("Vezérlő szerver (alap-cím)") },
                             placeholder = { Text(Settings.DEFAULT_CONTROL_URL) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),

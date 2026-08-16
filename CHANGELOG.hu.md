@@ -12,6 +12,56 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.019 — a 404, ami nem a szerverről szólt
+
+*2026-08-16*
+
+A telefon **Kapcsolat tesztelése** gombja egy éles telepítésen azt írta:
+*„A cím elérhető, de nem OnLIVE szerver válaszol (HTTP 404)."* Minden rendben
+volt, egyetlen dolgot kivéve: a **Vezérlő szerver** mezőben az admin *oldal*
+címe állt.
+
+```
+mezőben:   https://live.pelda.com/admin
+meghívva:  https://live.pelda.com/admin/api/session/ping   → 404
+helyesen:  https://live.pelda.com
+```
+
+Az app az alap-címhez fűzi a saját útvonalait, tehát az `/admin` — ami a
+szerver egyik OLDALA, sosem része az alap-címnek — minden kérést egy szinttel
+mélyebbre tolt. És semmi nem szólt róla: a szerver futott, az alagút élt, a
+streamkulcs jó volt.
+
+Védőháló mind a négy helyen, ahol ez elromolhat:
+
+- **A telefon** mentéskor alap-címmé alakítja az értékeket: a vezérlő szerver
+  címéről lekerül a záró `/admin` vagy `/live`, az ingest címről pedig a
+  bemásolt `…/<stream>/whip`. A javított érték visszakerül a mezőbe, hogy
+  látszódjon, mi lett elmentve. Egyéb útvonalhoz nem nyúlunk — reverse proxy
+  mögött jogos lehet.
+- **A 404 üzenete** mostantól kiírja, melyik címet hívta meg, és megmondja a
+  szabályt, ahelyett hogy a szerverre fogná.
+- **A szerver** induláskor ellenőrzi mind a három `ONLIVE_PUBLIC_*_URL` értéket,
+  és konkrét hibát naplóz — a helyes alakkal együtt.
+- **A Streamkulcs fül** ugyanezt kiírja, hiszen épp onnan másolják ki ezeket.
+- **A `config.bat`** nem fogad el útvonalas címet, hanem felajánlja az alap-címet.
+
+### A második, csendesebb fele
+
+Ugyanott az `ONLIVE_PUBLIC_INGEST_URL=https://live.pelda.com/ingest` állt — egy
+hostname mindenre. Ez nem működhet, és érdemes kimondani, miért: a WHIP a
+**MediaMTX 8889**-es portjára megy, a vezérlő szerver a 8080-ason hallgat, a
+**cloudflared pedig nem vág le útvonal-előtagot**, tehát a `…/ingest/onlive/whip`
+kérés szó szerint így érkezik meg a vezérlő szerverhez. Az ingestnek saját
+tunnel-hostname kell (`ingest.pelda.com → http://localhost:8889`). A szerver
+mostantól figyelmeztet, ha az ingest és az admin host megegyezik.
+
+Kilenc új teszt (összesen 211), köztük az, ahogy a varázsló végig kijavít egy
+bemásolt `…/admin` címet. A `.env.example` és a `docs/OPERATIONS.md`
+hibaelhárító táblája is kimondja az alap-cím szabályt.
+
+---
+
 ## 1.0.018 — feloldatlan merge-konfliktus a `gradle.properties`-ben
 
 *2026-08-16*

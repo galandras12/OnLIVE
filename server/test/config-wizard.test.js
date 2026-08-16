@@ -199,3 +199,30 @@ test('a meglévő .env-ről mentés készül', async () => {
 });
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+test('az /admin végű címet visszakérdezi, és a helyeset menti', async () => {
+  // Ez a hiba egy éles telepítést állított meg: a telefon HTTP 404-et kapott,
+  // mert a vezérlő szerver címe a webes felület címe volt.
+  const root = makeRoot();
+  const { code } = await runWizard(root, [
+    '',                            // port
+    PASSWORD, PASSWORD,            // admin jelszó
+    '',                            // streamkulcs → generálj
+    '',                            // /live token → ne
+    'pelda.hu',                    // fődomain
+    'n',                           // „Jó így?" → nem, megadom egyenként
+    'https://live.pelda.hu/admin', // ← a klasszikus elgépelés
+    '',                            // „Legyen inkább https://live.pelda.hu?" → igen
+    '',                            // Live URL → marad a származtatott
+    '',                            // Ingest URL → marad a származtatott
+    '',                            // stream útvonal
+    '', '',                        // mediamtx exe + yml
+    '',                            // tunnel service
+    '',                            // „Mehet?" → igen
+  ]);
+
+  assert.equal(code, 0);
+  const env = parseEnvContent(readFileSync(path.join(root, '.env'), 'utf8'));
+  assert.equal(env.ONLIVE_PUBLIC_ADMIN_URL, 'https://live.pelda.hu', 'az /admin résznek le kell esnie');
+  assert.equal(env.ONLIVE_PUBLIC_INGEST_URL, 'https://ingest.pelda.hu');
+});

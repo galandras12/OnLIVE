@@ -12,6 +12,57 @@ mapping between the two.
 
 ---
 
+## 1.0.019 — the 404 that was not about the server
+
+*2026-08-16*
+
+The phone's **Test connection** button reported *"the address is reachable, but
+no OnLIVE server answers (HTTP 404)"* on a live installation. Everything was
+right except one thing: the **Control server** field held the address of the
+admin *page*.
+
+```
+field:   https://live.example.com/admin
+called:  https://live.example.com/admin/api/session/ping   → 404
+correct: https://live.example.com
+```
+
+The app appends its own paths to the base address, so `/admin` — which is a
+page of the server, never part of the origin — pushed every request one level
+too deep. Nothing in the system said so: the server was running, the tunnel was
+up, the stream key was valid.
+
+Guardrails, in the four places this can go wrong:
+
+- **The phone** normalises the addresses when saving: a trailing `/admin` or
+  `/live` comes off the control URL, and a pasted `…/<stream>/whip` comes off the
+  ingest URL. The corrected value is written back into the field, so it is
+  visible what was saved. Other paths are left alone — a server behind a reverse
+  proxy may legitimately live under one.
+- **The 404 message** now names the URL it actually called and states the rule,
+  instead of blaming the server.
+- **The server** checks all three `ONLIVE_PUBLIC_*_URL` values at startup and
+  logs a concrete error, including the corrected form.
+- **The Stream key tab** shows the same findings, since that is the page people
+  copy these values from.
+- **`config.bat`** rejects an address with a path and offers the origin instead.
+
+### The second, quieter half
+
+The same installation had `ONLIVE_PUBLIC_INGEST_URL=https://live.example.com/ingest`
+— one hostname for everything. That cannot work, and it is worth stating why:
+WHIP goes to **MediaMTX on port 8889**, the control server listens on 8080, and
+**cloudflared does not strip path prefixes**, so `…/ingest/onlive/whip` arrives
+at the control server exactly as written. The ingest address needs its own
+tunnel hostname (`ingest.example.com → http://localhost:8889`). The server now
+warns when the ingest and admin hosts are identical.
+
+Nine new tests (211 in total), including the wizard correcting a pasted
+`…/admin` address end to end. `.env.example` and the troubleshooting table in
+`docs/OPERATIONS.md` now state the base-address rule explicitly.
+
+---
+
 ## 1.0.018 — an unresolved merge conflict in `gradle.properties`
 
 *2026-08-16*
