@@ -12,6 +12,51 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.018 — feloldatlan merge-konfliktus a `gradle.properties`-ben
+
+*2026-08-16*
+
+Az eszközlánc **AGP 9.3.1 / Gradle 9.5.0**-ra lépett — ez a helyes párosítás,
+mert az AGP 9 legalább Gradle 9.5-öt kér. Az a commit viszont egy félbehagyott
+összefésülést is magával hozott:
+
+```
+<<<<<<< Updated upstream
+...
+=======
+...
+>>>>>>> Stashed changes
+```
+
+Az `android/gradle.properties` ezekkel a jelölőkkel került be a repóba. Ez
+rosszabb, mint egy szintaktikai hiba, mert nem az: a Gradle a `.properties`-t
+soronként olvassa, a jelölőkből értelmetlen kulcsokat csinál, és megy tovább —
+vagyis a build nem áll meg, csak épp nem azt jelenti, aminek látszik.
+
+A fájl most fel van oldva. Az Android Studio által betett blokk marad, mert azok
+a kapcsolók nem szépészetiek: az `android.builtInKotlin=false` és az
+`android.newDsl=false` tartja életben a klasszikus
+`org.jetbrains.kotlin.android` plugint és a megszokott `android { }` DSL-t az
+AGP 9 alatt. Az AGP továbbra is „deprecated" figyelmeztetést ír mindegyikre —
+ezek sárga háromszögek, nem hibák —, és kivenni őket csak a beépített Kotlin
+támogatásra való átállással együtt szabad.
+
+Ami közben kikerült: az 1.0.016-os
+`android.dependency.excludeLibraryComponentsFromConstraints`. Azt az AGP 8.13
+javasolta; az AGP 9-es eszközlánc helyette az
+`android.dependency.useConstraints=true` sort állítja be, a kettőt egyszerre
+tartani egymásnak feszülő beállítás lenne.
+
+### Védelem a következő ellen
+
+Három új teszt (összesen 203). Az egyik végigjárja a repó összes szöveges
+fájlját, és elhasal bármilyen konfliktus-jelölőn — az előző commiten el is
+hasal, ezen már nem. A másik kettő azt nézi, hogy a build-konfigurációs fájlok
+megvannak-e, és hogy az AGP fő verziója és a Gradle wrapper továbbra is
+illeszkedik-e; ez az eltérés ugyanis még a fordítás előtt megállítja a buildet.
+
+---
+
 ## 1.0.017 — `config.bat`: a beállítás többé nem fájlszerkesztés
 
 *2026-08-16*

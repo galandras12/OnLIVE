@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.017** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.018** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -195,3 +195,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.015`](CHANGELOG.md#10015--compilesdk-36-so-the-new-libraries-build) | — | compileSdk 36, so the new libraries build |
 | [`1.0.016`](CHANGELOG.md#10016--the-yellow-triangles-in-the-sync-log) | — | The yellow triangles in the sync log |
 | [`1.0.017`](CHANGELOG.md#10017--configbat-setup-is-no-longer-file-editing) | — | `config.bat`: setup is no longer file editing |
+| [`1.0.018`](CHANGELOG.md#10018--an-unresolved-merge-conflict-in-gradleproperties) | — | An unresolved merge conflict in `gradle.properties` |

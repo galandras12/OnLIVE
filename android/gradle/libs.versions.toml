@@ -5,10 +5,10 @@
 #  AGP és Gradle EGYÜTT mozog. A minimumot az AGP maga ellenőrzi:
 #      AGP 8.13.x → Gradle >= 8.13
 #      AGP 9.x    → Gradle >= 9.5
-#  A wrapper jelenleg Gradle 9.3.0-n áll (gradle/wrapper/gradle-wrapper.properties),
-#  ami a 8.13.2-höz bőven megfelel. AGP 9-re CSAK Gradle 9.5+ mellett lépj.
-#
-#  Az AGP 8.5.2 „tested up to compileSdk 34" volt — ezt szünteti meg a 8.13.
+#  Az eszközlánc AGP 9.3.1-en áll, a wrapper pedig Gradle 9.5.0-n
+#  (gradle/wrapper/gradle-wrapper.properties) — a kettő így illeszkedik.
+#  A régi Kotlin plugin és a régi DSL az android/gradle.properties
+#  kapcsolóival marad érvényben; azokat csak együtt szabad kivenni.
 #
 #  A compileSdk 36, mert az alábbi könyvtárak `minCompileSdk = 36`-tal jönnek
 #  (CameraX 1.6, androidx.core 1.18, activity 1.13). Enélkül a build a

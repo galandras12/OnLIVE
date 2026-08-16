@@ -12,6 +12,49 @@ mapping between the two.
 
 ---
 
+## 1.0.018 — an unresolved merge conflict in `gradle.properties`
+
+*2026-08-16*
+
+The toolchain moved up to **AGP 9.3.1 / Gradle 9.5.0** — which is the right
+pairing, since AGP 9 requires Gradle 9.5 or newer. The commit that did it,
+however, also carried a file that was never finished merging:
+
+```
+<<<<<<< Updated upstream
+...
+=======
+...
+>>>>>>> Stashed changes
+```
+
+`android/gradle.properties` went into the repository with those markers still in
+it. That is worse than a syntax error, because it is not one: Gradle reads
+`.properties` line by line, turns the markers into meaningless keys, and carries
+on — so the build does not stop, it just no longer means what it looks like.
+
+The file is now resolved. The block Android Studio added stays, because those
+switches are not cosmetic — `android.builtInKotlin=false` and
+`android.newDsl=false` are what keep the classic `org.jetbrains.kotlin.android`
+plugin and the familiar `android { }` DSL working under AGP 9. AGP still prints
+a deprecation warning for each of them; they are yellow triangles, not errors,
+and removing them is only safe together with migrating to built-in Kotlin.
+
+Dropped in the process: `android.dependency.excludeLibraryComponentsFromConstraints`
+from 1.0.016. That was AGP 8.13's suggestion; the AGP 9 toolchain sets
+`android.dependency.useConstraints=true` instead, and holding both would be two
+settings pulling against each other.
+
+### A guard against the next one
+
+Three new tests (203 in total). One walks every text file in the repository and
+fails on any conflict marker — it fails on the previous commit and passes on
+this one. The other two check that the build configuration files exist and that
+the AGP major version and the Gradle wrapper still match, since that mismatch
+stops the build before compilation even starts.
+
+---
+
 ## 1.0.017 — `config.bat`: setup is no longer file editing
 
 *2026-08-16*
