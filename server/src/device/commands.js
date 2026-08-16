@@ -28,6 +28,8 @@ export const DeviceCommands = Object.freeze({
   SET_LENS: 'setLens',
   SET_SOURCE: 'setSource',
   SET_QUALITY: 'setQuality',
+  /** Kép-irány: 16:9 fekvő vagy 9:16 álló (1.0.101). */
+  SET_ORIENTATION: 'setOrientation',
   /** Kiegészítők. */
   TORCH: 'torch',
   PHOTO: 'photo',

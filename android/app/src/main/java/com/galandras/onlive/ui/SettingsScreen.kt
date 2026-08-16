@@ -14,7 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -44,12 +46,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
+import com.galandras.onlive.BuildConfig
 import com.galandras.onlive.net.ControlApi
 import com.galandras.onlive.settings.AppSettings
 import com.galandras.onlive.settings.AudioBitrate
 import com.galandras.onlive.settings.AudioSampleRate
+import com.galandras.onlive.settings.ConnectionMode
 import com.galandras.onlive.settings.FrameRate
 import com.galandras.onlive.settings.Settings
+import com.galandras.onlive.settings.StreamOrientation
 import com.galandras.onlive.settings.VideoBitrate
 import com.galandras.onlive.settings.VideoResolution
 import kotlinx.coroutines.launch
@@ -94,6 +99,9 @@ fun SettingsScreen(
     var turnUrl by remember(settings.turnUrl) { mutableStateOf(settings.turnUrl) }
     var turnUser by remember(settings.turnUsername) { mutableStateOf(settings.turnUsername) }
     var turnSecret by remember(settings.turnCredential) { mutableStateOf(settings.turnCredential) }
+    var localControl by remember(settings.localControlBaseUrl) { mutableStateOf(settings.localControlBaseUrl) }
+    var localIngest by remember(settings.localIngestBaseUrl) { mutableStateOf(settings.localIngestBaseUrl) }
+    var mode by remember(settings.connectionMode) { mutableStateOf(settings.connectionMode) }
 
     var keyVisible by remember { mutableStateOf(false) }
     var bitrate by remember(settings.videoBitrateKbps) { mutableStateOf(settings.videoBitrateKbps.toFloat()) }
@@ -122,6 +130,13 @@ fun SettingsScreen(
             ingestUser = ingestUser.trim().ifBlank { Settings.DEFAULT_INGEST_USER },
         )
         appSettings.setTurn(turnUrl.trim(), turnUser.trim(), turnSecret.trim())
+        appSettings.setLocalEndpoints(
+            control = Settings.normalizeControlBase(localControl),
+            ingest = Settings.normalizeIngestBase(localIngest, path.ifBlank { Settings.DEFAULT_STREAM_PATH }),
+            mode = mode,
+        )
+        localControl = Settings.normalizeControlBase(localControl)
+        localIngest = Settings.normalizeIngestBase(localIngest, path.ifBlank { Settings.DEFAULT_STREAM_PATH })
         return appSettings.current()
     }
 
@@ -264,7 +279,8 @@ fun SettingsScreen(
                                             .onSuccess {
                                                 testOk = true
                                                 testResult = "Rendben. A szerver válaszol, a kulcs jó. " +
-                                                    "Állapot: ${it.state}"
+                                                    "Állapot: ${it.state}" +
+                                                    if (it.route.isNotBlank()) "\n${it.route}" else ""
                                             }
                                             .onFailure {
                                                 testOk = false
@@ -288,6 +304,55 @@ fun SettingsScreen(
                                 fontSize = 13.sp,
                             )
                         }
+                    }
+                }
+
+                // -----------------------------------------------------------
+                //  HELYI ELÉRÉS — LAN / Tailscale (1.0.101)
+                // -----------------------------------------------------------
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SectionTitle("Helyi elérés — LAN / Tailscale")
+                        Hint(
+                            "A Cloudflare Tunnelen a WHIP jelzés átmegy, a videó viszont NEM. " +
+                                "Ha a telefon ugyanazon a hálózaton (vagy ugyanabban a Tailscale " +
+                                "hálózatban) van, mint a szerver, itt megadhatod a helyi címét: " +
+                                "akkor a kép a hálózaton belül marad, TURN nélkül is van adás, és " +
+                                "a késleltetés is kisebb. A címeket az admin felület Streamkulcs " +
+                                "fülén írja ki a szerver.",
+                        )
+
+                        OutlinedTextField(
+                            value = localControl,
+                            onValueChange = { localControl = it; testResult = null },
+                            label = { Text("Helyi vezérlő szerver") },
+                            placeholder = { Text("http://100.x.y.z:8080") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        OutlinedTextField(
+                            value = localIngest,
+                            onValueChange = { localIngest = it; testResult = null },
+                            label = { Text("Helyi ingest (WHIP)") },
+                            placeholder = { Text("http://100.x.y.z:8889") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        SubTitle("Kapcsolat mód")
+                        ChipRow {
+                            ConnectionMode.entries.forEach { option ->
+                                FilterChip(
+                                    selected = option == mode,
+                                    onClick = { mode = option; testResult = null },
+                                    label = { Text(option.label) },
+                                )
+                            }
+                        }
+                        Hint(mode.hint)
                     }
                 }
 
@@ -340,6 +405,21 @@ fun SettingsScreen(
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         SectionTitle("Minőség")
                         Hint("Adás közben is állítható; a szerver a web felületről is átállíthatja.")
+
+                        SubTitle("Kép-irány")
+                        ChipRow {
+                            StreamOrientation.entries.forEach { option ->
+                                FilterChip(
+                                    selected = option == settings.orientation,
+                                    onClick = { scope.launch { appSettings.setOrientation(option) } },
+                                    label = { Text(option.label) },
+                                )
+                            }
+                        }
+                        Hint(
+                            "Az adás INDÍTÁSAKOR rögzül: élő közvetítés közben nem vált, mert a " +
+                                "nézőnél átugrana a kompozíció. A főképernyőn is ott a gomb.",
+                        )
 
                         SubTitle("Felbontás")
                         ChipRow {
@@ -423,6 +503,11 @@ fun SettingsScreen(
                     color = Color.Gray,
                 )
 
+                // -----------------------------------------------------------
+                //  Névjegy (1.0.101)
+                // -----------------------------------------------------------
+                About()
+
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -432,6 +517,35 @@ fun SettingsScreen(
 // ---------------------------------------------------------------------------
 //  Apró építőelemek
 // ---------------------------------------------------------------------------
+
+/**
+ * Névjegy — alkalmazás neve és verziója (1.0.101).
+ *
+ * A verzió a `BuildConfig`-ból jön, tehát nem lehet elfelejteni frissíteni:
+ * az érték a `build.gradle.kts` `versionName`-jével egyezik, azt pedig a
+ * kiadás állítja.
+ */
+@Composable
+private fun About() {
+    Card(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF9CA3AF))
+            Column {
+                Text("OnLIVE", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(
+                    "Verzió ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                )
+                Text("Élő közvetítés — telefon, szerver, OBS", color = Color.Gray, fontSize = 11.sp)
+            }
+        }
+    }
+}
 
 @Composable
 private fun SectionTitle(text: String) {

@@ -12,6 +12,104 @@ mapping between the two.
 
 ---
 
+## 1.0.101 — portrait and landscape, a lens slider, and a local route
+
+*2026-08-16*
+
+Six requests in one release. What they have in common is that each one removes a
+decision the system used to make for you.
+
+### 1. The preview keeps the stream's aspect ratio
+
+The camera image used to fill the display, so the edges showed things that never
+made it into the broadcast. It now sits in a fixed 16:9 or 9:16 box with
+`FIT_CENTER` scaling: **what you see is what goes out**.
+
+### 2. 2160p
+
+The resolution list lived in three places — the Android enum, the server
+validation and the admin HTML buttons. Adding 4K made the obvious point: one
+list is easy to extend, three are easy to forget. The two server-side ones now
+come from a single module (`device/capture-options.js`), and a test measures
+them against the admin UI's buttons.
+
+The video bitrate ceiling went from 12,000 to **25,000 kbps**, because 12 Mbit/s
+is not enough for 4K — the old limit would have silently clamped the value. The
+same limit now applies on the server, on the phone and on the slider.
+
+### 3. Lens slider and a Chromecast icon
+
+The four optics sit on one axis — ultra-wide → main → tele, with the front
+camera at the end — so you can drag across them instead of aiming at a chip for
+every switch. The list is device-specific, so the slider's step count comes from
+the optics actually present. Screen sharing got a **Chromecast** icon.
+
+### 4. 16:9 landscape and 9:16 portrait
+
+A rotate button on the main screen, chips in the settings, and the same switch
+on the admin UI. The important part: the orientation is **not decided by how you
+hold the phone**. We set the capture use cases' `targetRotation` explicitly, so
+the aspect ratio does not flip when the device moves in your hand.
+
+The button is **only active while idle**. Changing the ratio mid-broadcast would
+make the composition jump for viewers — the OBS scene, the overlays and the
+recording are all cut for one ratio. A command arriving from the web UI during a
+broadcast is stored, and the phone says it takes effect at the next start.
+
+WebRTC receives the **swapped** dimensions (`captureWidth`/`captureHeight`),
+otherwise the encoder would scale a 9:16 image into 16:9. Resolution selection
+stays in landscape sensor coordinates, because that is where CameraX looks for a
+matching size.
+
+### 5. About box
+
+The app's name and version at the bottom of the settings, read from
+`BuildConfig` rather than written into the UI as text. The version now lives in
+exactly one place: `app/build.gradle.kts` (`versionName = "1.0.101"`).
+
+### 6. Local route — LAN and Tailscale
+
+The most valuable of the six. WHIP **signalling** passes through the Cloudflare
+Tunnel, WebRTC **media does not** — that needs TURN. But when the phone and the
+server are on the same network (or in the same Tailscale network), the tunnel
+can be bypassed: the picture stays local, **there is a broadcast without TURN**,
+and latency drops.
+
+So the phone's settings now have a *Local access* section (local control URL +
+local ingest URL) and a **connection mode**:
+
+| Mode | Behaviour |
+|---|---|
+| Automatic | probes the local address and uses it if it answers, otherwise the tunnel |
+| Local only | LAN / Tailscale exclusively |
+| Tunnel only | the public addresses exclusively |
+
+The addresses do not have to be guessed: the server prints them on the
+**admin → Stream key** tab, from its own network interfaces. The Tailscale
+address goes first because it works away from home too; it is recognised by the
+100.64.0.0/10 CGNAT range rather than the interface name (which is `Tailscale`
+on Windows, `tailscale0` on Linux and `utun3` on macOS — the last of which tells
+you nothing).
+
+The `AUTO` probe runs on a **separate client with a 1.5-second timeout**. The
+regular 8 seconds would mean the "Start" button hangs that long on mobile data
+before falling back to the tunnel. The result is cached for 30 seconds, so it
+recovers by itself after a network change.
+
+And the part that matters most: the **reason** for the choice is printed — on the
+main screen and in the connection test. A silent route choice would be exactly
+the kind of hard-to-trace failure the recent releases have been fixing.
+
+### Tests
+
+14 new tests (211 → 225). The resolution and orientation lists are measured
+against the admin HTML, Tailscale detection is checked at the CGNAT boundaries
+(100.63 and 100.128 are not Tailscale), the private ranges at the RFC 1918 edges
+(172.32 falls outside), and the suggested addresses are checked to point at the
+right ports.
+
+---
+
 ## 1.0.019 — the 404 that was not about the server
 
 *2026-08-16*

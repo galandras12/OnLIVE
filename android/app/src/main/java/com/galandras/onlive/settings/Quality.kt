@@ -8,12 +8,16 @@ package com.galandras.onlive.settings
  * szervernek, hogy az admin web UI-n is látszódjon, épp mivel megy az adás.
  */
 
-/** Videó felbontás. A rövidebb oldal a mérvadó, az arányt a forrás adja. */
+/**
+ * Videó felbontás. A rövidebb oldal a mérvadó, az arányt a [StreamOrientation]
+ * adja: a `width`/`height` itt mindig a FEKVŐ alak.
+ */
 enum class VideoResolution(val label: String, val width: Int, val height: Int) {
     P480("480p", 854, 480),
     P720("720p", 1280, 720),
     P1080("1080p", 1920, 1080),
-    P1440("1440p", 2560, 1440);
+    P1440("1440p", 2560, 1440),
+    P2160("2160p", 3840, 2160);
 
     companion object {
         val DEFAULT = P1080
@@ -35,13 +39,52 @@ enum class FrameRate(val fps: Int) {
 }
 
 /**
+ * A stream kép-iránya (1.0.101).
+ *
+ * Az adás INDÍTÁSA előtt választható, és utána a capture ehhez igazodik — nem
+ * ahhoz, ahogy a felhasználó épp tartja a telefont. Ezért állítjuk be fixen a
+ * use case-ek `targetRotation`-jét: enélkül a kép aránya attól függene, hogy a
+ * kézben megbillent-e a készülék, az OBS jelenet és az overlay-ek viszont
+ * egyetlen arányra vannak szabva.
+ */
+enum class StreamOrientation(val label: String, val ratio: String, val surfaceRotation: Int) {
+    /** 16:9 — a kép fekvő, akkor is, ha a telefont állva tartod. */
+    LANDSCAPE("16:9 fekvő", "16:9", android.view.Surface.ROTATION_90),
+
+    /** 9:16 — a kép álló (Shorts, Reels, TikTok). */
+    PORTRAIT("9:16 álló", "9:16", android.view.Surface.ROTATION_0);
+
+    val isPortrait: Boolean get() = this == PORTRAIT
+
+    /** Szélesség/magasság arány a Compose `aspectRatio()`-jához. */
+    val aspect: Float get() = if (isPortrait) 9f / 16f else 16f / 9f
+
+    /** Amit a szervernek jelentünk. */
+    val wire: String get() = name.lowercase()
+
+    companion object {
+        val DEFAULT = LANDSCAPE
+
+        /** A szerver `landscape` / `portrait` néven küldi (device/capture-options.js). */
+        fun fromWire(value: String?): StreamOrientation =
+            if (value?.equals("portrait", ignoreCase = true) == true) PORTRAIT else LANDSCAPE
+
+        fun fromName(name: String?): StreamOrientation =
+            entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
+}
+
+/**
  * Videó bitráta (kbps). A WebRTC ezt felső korlátként kapja meg
  * (`RtpParameters.Encoding.maxBitrateBps`), a tényleges érték ennél a
  * hálózat függvényében kisebb lehet.
+ *
+ * A felső határ 2160p miatt 25 000: 4K-hoz 12 Mbit/s már kevés. A szerver
+ * ugyanezt a korlátot érvényesíti (device/capture-options.js).
  */
 object VideoBitrate {
     const val MIN_KBPS = 500
-    const val MAX_KBPS = 12_000
+    const val MAX_KBPS = 25_000
 
     /** Ajánlott kiindulási bitráta a felbontás/fps párosra. */
     fun recommendedKbps(resolution: VideoResolution, frameRate: FrameRate): Int {
@@ -50,6 +93,7 @@ object VideoBitrate {
             VideoResolution.P720 -> 2_500
             VideoResolution.P1080 -> 4_500
             VideoResolution.P1440 -> 8_000
+            VideoResolution.P2160 -> 16_000
         }
         return if (frameRate.fps > 30) (base * 1.5).toInt() else base
     }

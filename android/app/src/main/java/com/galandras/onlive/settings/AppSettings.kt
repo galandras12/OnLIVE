@@ -33,6 +33,16 @@ data class Settings(
     val audioBitrate: AudioBitrate = AudioBitrate.DEFAULT,
     val lens: LensKind = LensKind.DEFAULT,
     val source: CaptureSource = CaptureSource.CAMERA,
+    /** 16:9 fekvő vagy 9:16 álló — az adás indításakor rögzül (1.0.101). */
+    val orientation: StreamOrientation = StreamOrientation.DEFAULT,
+    /**
+     * Helyi (LAN / Tailscale) elérés (1.0.101). Ha ki van töltve, az alagút
+     * megkerülhető: a WebRTC média a hálózaton belül marad, tehát TURN nélkül
+     * is van kép, és a késleltetés is kisebb.
+     */
+    val localControlBaseUrl: String = "",
+    val localIngestBaseUrl: String = "",
+    val connectionMode: ConnectionMode = ConnectionMode.DEFAULT,
     val oemGuideDismissed: Boolean = false,
     /**
      * TURN relay a WebRTC médiaúthoz. A WHIP jelzés átmegy a Cloudflare
@@ -46,6 +56,32 @@ data class Settings(
     /** A teljes WHIP publish URL: `https://ingest.galandras.com/<stream>/whip`. */
     val whipUrl: String
         get() = "${ingestBaseUrl.trimEnd('/')}/${streamPath.trim('/')}/whip"
+
+    /** Ugyanez a helyi címmel — üres, ha nincs helyi ingest megadva. */
+    val localWhipUrl: String
+        get() = if (localIngestBaseUrl.isBlank()) {
+            ""
+        } else {
+            "${localIngestBaseUrl.trimEnd('/')}/${streamPath.trim('/')}/whip"
+        }
+
+    /** Van-e egyáltalán mit megpróbálni helyben. */
+    val hasLocalEndpoints: Boolean
+        get() = localControlBaseUrl.isNotBlank() && localIngestBaseUrl.isNotBlank()
+
+    /**
+     * A capture mérete a választott irányban.
+     *
+     * A [VideoResolution] mindig fekvő alakot tárol, tehát álló módban a két
+     * oldal cserél. Ez megy a WebRTC `adaptOutputFormat`-jába és a
+     * képernyő-megosztás méretezésébe is — ha itt marad a fekvő alak, a
+     * kódoló 16:9-re skálázza a 9:16-os képet, és fekete sávok kerülnek rá.
+     */
+    val captureWidth: Int
+        get() = if (orientation.isPortrait) resolution.height else resolution.width
+
+    val captureHeight: Int
+        get() = if (orientation.isPortrait) resolution.width else resolution.height
 
     companion object {
         const val DEFAULT_INGEST_URL = "https://ingest.galandras.com"
@@ -114,6 +150,10 @@ class AppSettings(private val context: Context) {
         val turnUrl = stringPreferencesKey("turn_url")
         val turnUsername = stringPreferencesKey("turn_username")
         val turnCredential = stringPreferencesKey("turn_credential")
+        val orientation = stringPreferencesKey("orientation")
+        val localControlUrl = stringPreferencesKey("local_control_url")
+        val localIngestUrl = stringPreferencesKey("local_ingest_url")
+        val connectionMode = stringPreferencesKey("connection_mode")
     }
 
     val flow: Flow<Settings> = context.dataStore.data.map { p ->
@@ -138,6 +178,10 @@ class AppSettings(private val context: Context) {
             turnUrl = p[Keys.turnUrl] ?: "",
             turnUsername = p[Keys.turnUsername] ?: "",
             turnCredential = p[Keys.turnCredential] ?: "",
+            orientation = StreamOrientation.fromName(p[Keys.orientation]),
+            localControlBaseUrl = p[Keys.localControlUrl] ?: "",
+            localIngestBaseUrl = p[Keys.localIngestUrl] ?: "",
+            connectionMode = ConnectionMode.fromName(p[Keys.connectionMode]),
         )
     }
 
@@ -179,6 +223,16 @@ class AppSettings(private val context: Context) {
 
     suspend fun setSource(value: CaptureSource) =
         context.dataStore.edit { it[Keys.source] = value.name }
+
+    suspend fun setOrientation(value: StreamOrientation) =
+        context.dataStore.edit { it[Keys.orientation] = value.name }
+
+    suspend fun setLocalEndpoints(control: String, ingest: String, mode: ConnectionMode) =
+        context.dataStore.edit {
+            it[Keys.localControlUrl] = control
+            it[Keys.localIngestUrl] = ingest
+            it[Keys.connectionMode] = mode.name
+        }
 
     suspend fun setTurn(url: String, username: String, credential: String) =
         context.dataStore.edit {

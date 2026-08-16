@@ -18,6 +18,7 @@ import com.galandras.onlive.settings.CaptureSource
 import com.galandras.onlive.settings.FrameRate
 import com.galandras.onlive.settings.LensKind
 import com.galandras.onlive.settings.Settings
+import com.galandras.onlive.settings.StreamOrientation
 import com.galandras.onlive.settings.VideoResolution
 import com.galandras.onlive.util.Notifications
 import com.galandras.onlive.util.TorchController
@@ -252,7 +253,16 @@ class StreamService : LifecycleService() {
                     if (attempt == 0) ConnectionState.CONNECTING else ConnectionState.RECONNECTING
                 )
 
-                val result = runCatching { engine?.publish(settings) }
+                // Melyik úton publikálunk: helyi (LAN / Tailscale) vagy alagút.
+                // Minden próbálkozás előtt újra eldöntjük — ha a wifi közben
+                // visszajött, a következő kör már helyben megy (1.0.101).
+                val route = controlApi.resolveEndpoints(settings)
+                if (attempt == 0) {
+                    Log.i(TAG, "Publish útvonal: ${route.reason} (${route.whip})")
+                    StreamBus.setMessage(route.reason)
+                }
+
+                val result = runCatching { engine?.publish(settings, route.whip) }
 
                 if (result.isSuccess) {
                     StreamBus.setConnection(ConnectionState.LIVE)
@@ -401,9 +411,11 @@ class StreamService : LifecycleService() {
     private fun handleApplySettings() = lifecycleScope.launch {
         val settings = appSettings.current()
         engine?.applyVideoBitrate(settings.videoBitrateKbps)
+        // A választott irány szerinti méret (1.0.101) — álló módban a két
+        // oldal cserél, különben a kódoló 16:9-re skálázná a 9:16-os képet.
         engine?.adaptOutput(
-            settings.resolution.width,
-            settings.resolution.height,
+            settings.captureWidth,
+            settings.captureHeight,
             settings.frameRate.fps,
         )
         if (currentSource == CaptureSource.CAMERA && cameraSource?.isRunning == true) {
@@ -508,6 +520,23 @@ class StreamService : LifecycleService() {
                     }
                 } else {
                     handleSetSource(sourceIntent(CaptureSource.CAMERA))
+                }
+            }
+
+            RemoteCommand.SET_ORIENTATION -> lifecycleScope.launch {
+                val requested = StreamOrientation.fromWire(command.payload.optString("orientation"))
+                if (userWantsLive) {
+                    // Élő adás közben nem cserélünk arányt: a nézőnél átugrana
+                    // a kompozíció, az OBS jelenet és az overlay-ek pedig egy
+                    // arányra vannak szabva. Elmentjük — a következő indítás
+                    // már ezzel megy.
+                    appSettings.setOrientation(requested)
+                    StreamBus.setMessage(
+                        "Kép-irány: ${requested.label} — a következő adásindításkor lép életbe.",
+                    )
+                } else {
+                    appSettings.setOrientation(requested)
+                    handleApplySettings()
                 }
             }
 

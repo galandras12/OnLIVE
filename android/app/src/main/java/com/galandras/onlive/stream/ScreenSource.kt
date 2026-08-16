@@ -238,7 +238,10 @@ class ScreenSource(
      * skálázva, és páros értékekre kerekítve (a H.264 enkóder ezt igényli).
      */
     private fun captureSize(settings: Settings, metrics: DisplayMetrics): Pair<Int, Int> {
-        val targetShortSide = minOf(settings.resolution.width, settings.resolution.height)
+        // A képernyő aránya adott — azt nem mi választjuk meg, hanem a
+        // készülék. A kép-irány beállítás (1.0.101) ezért itt csak a cél
+        // rövidebb oldalra hat, a 16:9 / 9:16 gomb a KAMERÁRA vonatkozik.
+        val targetShortSide = minOf(settings.captureWidth, settings.captureHeight)
         val shortSide = minOf(metrics.widthPixels, metrics.heightPixels)
         val scale = if (shortSide > 0) targetShortSide.toFloat() / shortSide else 1f
 

@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.019** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.101** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -197,3 +197,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.017`](CHANGELOG.md#10017--configbat-setup-is-no-longer-file-editing) | — | `config.bat`: setup is no longer file editing |
 | [`1.0.018`](CHANGELOG.md#10018--an-unresolved-merge-conflict-in-gradleproperties) | — | An unresolved merge conflict in `gradle.properties` |
 | [`1.0.019`](CHANGELOG.md#10019--the-404-that-was-not-about-the-server) | — | The 404 that was not about the server |
+| [`1.0.101`](CHANGELOG.md#10101--portrait-and-landscape-a-lens-slider-and-a-local-route) | — | Portrait and landscape, a lens slider, and a local route |

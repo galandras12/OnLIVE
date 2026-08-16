@@ -12,6 +12,104 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.101 — álló és fekvő adás, lencse-csúszka, helyi útvonal
+
+*2026-08-16*
+
+Hat kérés egy kiadásban. A közös bennük, hogy mind ott mozdít, ahol a rendszer
+eddig egy döntést ránk kényszerített.
+
+### 1. Az előnézet fix arányban áll
+
+A kamerakép eddig kitöltötte a kijelzőt, tehát a szélén olyan is látszott, ami
+az adásba már nem fért bele. Mostantól a stream arányában áll (16:9 vagy 9:16),
+`FIT_CENTER` skálázással: **amit látsz, az megy ki**.
+
+### 2. 2160p
+
+A felbontás-lista három helyen élt — az Android enumban, a szerver
+validációjában és az admin HTML gombjain. A 4K felvételekor derült ki, hogy
+egyet bővíteni könnyű, hármat viszont könnyű elfelejteni: a szerver oldali kettő
+innentől egyetlen modulból jön (`device/capture-options.js`), és teszt méri
+össze őket az admin felület gombjaival.
+
+A videó bitráta felső határa 12 000-ről **25 000 kbps**-ra nőtt, mert 4K-hoz
+12 Mbit/s kevés — a régi korlát némán levágta volna a beállított értéket. A
+határ a szerveren, a telefonon és a csúszkán is ugyanaz.
+
+### 3. Lencse-csúszka és Chromecast ikon
+
+A négy optika egy tengelyen áll — nagylátószögű → fő → tele, a végén az
+arcképes —, tehát végig lehet húzni rajtuk, nem külön koppintás minden váltás.
+A lista eszközfüggő, ezért a csúszka lépésszáma is a ténylegesen elérhető
+optikákból jön. A képernyő-megosztás **Chromecast** ikont kapott.
+
+### 4. 16:9 fekvő és 9:16 álló
+
+Forgatás-ikonos gomb a főképernyőn, chipek a beállításokban, és ugyanez a
+kapcsoló az admin felületen is. Amit fontos érteni: az irányt **nem az dönti
+el, ahogy a telefont tartod** — a capture use case-ek `targetRotation`-jét
+állítjuk be fixen, tehát a kép aránya akkor sem billen át, ha a készülék
+megmozdul a kézben.
+
+A gomb **csak készenlétben aktív**. Élő adás közben az arány cseréje azt
+jelentené, hogy a nézőnél átugrik a kompozíció — az OBS jelenet, az overlay-ek
+és a felvétel egyetlen arányra vannak szabva. A web felületről érkező parancsot
+a telefon ilyenkor elmenti, és megmondja, hogy a következő indításnál lép
+életbe.
+
+A WebRTC felé a **cserélt** méret megy (`captureWidth`/`captureHeight`),
+különben a kódoló 16:9-re skálázná a 9:16-os képet. A felbontás-választás
+viszont a szenzor koordinátáiban marad fekvő, mert a CameraX ott keres
+illeszkedő méretet.
+
+### 5. Névjegy
+
+A beállítások alján az app neve és verziója, a `BuildConfig`-ból — nem a
+felületre írt szövegként. Így a verzió egyetlen helyen él, a
+`app/build.gradle.kts`-ben (`versionName = "1.0.101"`).
+
+### 6. Helyi útvonal — LAN és Tailscale
+
+Ez a legtöbbet érő a hatból. A Cloudflare Tunnelen a WHIP **jelzés** átmegy, a
+WebRTC **média nem** — ahhoz TURN kell. Ha viszont a telefon és a szerver
+ugyanazon a hálózaton (vagy ugyanabban a Tailscale hálózatban) van, az alagút
+megkerülhető: a kép a hálózaton belül marad, **TURN nélkül is van adás**, és a
+késleltetés is kisebb.
+
+A telefon beállításaiban ezért van egy *Helyi elérés* szekció (helyi vezérlő
+cím + helyi ingest cím) és egy **Kapcsolat mód**:
+
+| Mód | Mit csinál |
+|---|---|
+| Automatikus | megnézi, válaszol-e a helyi cím, és ha igen, azon megy — különben az alagúton |
+| Csak helyi | kizárólag LAN / Tailscale |
+| Csak Tunnel | kizárólag a publikus címek |
+
+A címeket nem kell kitalálni: a szerver kiírja őket az **admin → Streamkulcs**
+fülön, a saját hálózati interfészeiből. A Tailscale-cím megy előre, mert az
+útközben is működik; a felismerés a 100.64.0.0/10 CGNAT tartományból történik,
+nem az interfész nevéből (az Windowson `Tailscale`, Linuxon `tailscale0`,
+macOS-en `utun3` — az utolsóból semmi nem látszik).
+
+Az `AUTO` mód próbája **külön, 1,5 másodperces** időzítésű kliensen fut. A
+rendes 8 másodperc itt azt jelentené, hogy mobilneten ennyit áll a „Kezdés"
+gomb, mielőtt az alagútra váltana. Az eredmény 30 másodpercig érvényes, tehát
+egy hálózatváltás után magától helyreáll.
+
+És ami ebből a legfontosabb: a választás **indoka** kiíródik — a főképernyőn és
+a kapcsolat-tesztben is. A néma útvonalválasztás pont olyan nehezen kereshető
+hiba lenne, mint amilyeneket az elmúlt kiadásokban javítottunk.
+
+### Tesztek
+
+14 új teszt (211 → 225). A felbontás- és irány-lista a szerveren és az admin
+HTML-ben egymáshoz mérve, a Tailscale-felismerés a CGNAT tartomány határaival
+(100.63 és 100.128 már nem az), a privát tartományok az RFC 1918 szélein
+(172.32 már kívül esik), és a javasolt címek a helyes portokra mutatnak.
+
+---
+
 ## 1.0.019 — a 404, ami nem a szerverről szólt
 
 *2026-08-16*

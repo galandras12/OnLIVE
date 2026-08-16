@@ -15,6 +15,16 @@ import { Router } from 'express';
 import { DeviceCommands } from '../device/commands.js';
 import { Events } from '../state/machine.js';
 import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
+import {
+  AUDIO_BITRATES,
+  AUDIO_SAMPLE_RATES,
+  FRAME_RATES,
+  ORIENTATIONS,
+  VIDEO_BITRATE,
+  assessOrientation,
+  assessResolution,
+  resolutionLabel,
+} from '../device/capture-options.js';
 
 /** Az admin gomb → állapotgép-esemény + telefon-parancs párosítás. */
 const SESSION_ACTIONS = {
@@ -88,36 +98,36 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
     const body = req.body ?? {};
 
     if (body.resolution) {
-      const value = String(body.resolution).toUpperCase();
-      if (!['P480', 'P720', 'P1080', 'P1440'].includes(value)) {
-        return res.status(400).json({ error: `Ismeretlen felbontás: ${body.resolution}` });
-      }
-      payload.resolution = value;
+      const assessment = assessResolution(body.resolution);
+      if (!assessment.ok) return res.status(400).json({ error: assessment.error });
+      payload.resolution = assessment.value;
     }
     if (body.fps !== undefined) {
       const fps = Number(body.fps);
-      if (![24, 30, 50, 60].includes(fps)) {
+      if (!FRAME_RATES.includes(fps)) {
         return res.status(400).json({ error: `Ismeretlen képfrissítés: ${body.fps}` });
       }
       payload.fps = fps;
     }
     if (body.videoBitrateKbps !== undefined) {
       const kbps = Number(body.videoBitrateKbps);
-      if (!Number.isFinite(kbps) || kbps < 500 || kbps > 12_000) {
-        return res.status(400).json({ error: 'A videó bitráta 500 és 12000 kbps között lehet.' });
+      if (!Number.isFinite(kbps) || kbps < VIDEO_BITRATE.minKbps || kbps > VIDEO_BITRATE.maxKbps) {
+        return res.status(400).json({
+          error: `A videó bitráta ${VIDEO_BITRATE.minKbps} és ${VIDEO_BITRATE.maxKbps} kbps között lehet.`,
+        });
       }
       payload.videoBitrateKbps = Math.round(kbps);
     }
     if (body.audioSampleRate !== undefined) {
       const hz = Number(body.audioSampleRate);
-      if (![16_000, 44_100, 48_000].includes(hz)) {
+      if (!AUDIO_SAMPLE_RATES.includes(hz)) {
         return res.status(400).json({ error: `Ismeretlen mintavétel: ${body.audioSampleRate}` });
       }
       payload.audioSampleRate = hz;
     }
     if (body.audioBitrateKbps !== undefined) {
       const kbps = Number(body.audioBitrateKbps);
-      if (![32, 64, 96, 128].includes(kbps)) {
+      if (!AUDIO_BITRATES.includes(kbps)) {
         return res.status(400).json({ error: `Ismeretlen hang bitráta: ${body.audioBitrateKbps}` });
       }
       payload.audioBitrateKbps = kbps;
@@ -148,6 +158,40 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
     res.json({ ok: true, command: commands.push(DeviceCommands.SET_QUALITY, payload) });
   });
 
+  /**
+   * Kép-irány: 16:9 fekvő vagy 9:16 álló (1.0.101).
+   *
+   * Miért külön végpont a minőségtől: ez nem menet közben állítható. A capture
+   * arányát az adás INDÍTÁSAKOR rögzítjük, mert élő stream közben cserélni a
+   * kép arányát azt jelentené, hogy a nézőnél átugrik a kompozíció — az OBS
+   * jelenet, az overlay-ek és a felvétel is 16:9-re vagy 9:16-ra van szabva.
+   * A telefon ezért a parancsot csak készenlétben hajtja végre.
+   */
+  admin.post('/orientation', (req, res) => {
+    const assessment = assessOrientation(req.body?.orientation);
+    if (!assessment.ok) return res.status(400).json({ error: assessment.error });
+
+    const live = controller.snapshot().state;
+    logChange(req, 'kamera', {
+      irany: { regi: commands.presence.capture?.orientation ?? null, uj: assessment.value },
+    });
+
+    res.json({
+      ok: true,
+      command: commands.push(DeviceCommands.SET_ORIENTATION, { orientation: assessment.value }),
+      note: ['idle', 'ended'].includes(live)
+        ? undefined
+        : 'Adás közben nem vált irányt: a telefon a következő indításnál veszi figyelembe.',
+    });
+  });
+
+  /** A választható értékek — a web felület ebből építi a gombokat. */
+  admin.get('/options', (req, res) => res.json({
+    orientations: ORIENTATIONS,
+    frameRates: FRAME_RATES,
+    videoBitrate: VIDEO_BITRATE,
+  }));
+
   /** Kiegészítők: vaku, kép mentése, helyi felvétel. */
   admin.post('/torch', (req, res) => {
     logChange(req, 'kamera', { vaku: { regi: null, uj: req.body?.on === true } });
@@ -174,9 +218,4 @@ export function createDeviceRoutes({ config, controller, commands, logger, admin
 
   router.use('/api/admin/device', admin);
   return router;
-}
-
-/** `P720` → `720p` — ahogy a telefon jelenti (settings/Quality.kt). */
-function resolutionLabel(value) {
-  return String(value).replace(/^P(\d+)$/i, '$1p');
 }

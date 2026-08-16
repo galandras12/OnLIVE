@@ -18,6 +18,7 @@ import { DeviceCommands } from '../device/commands.js';
 import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 import { hookAuth, phoneAuth } from './auth.js';
 import { assessPublicUrls } from '../settings/public-urls.js';
+import { localEndpoints } from '../settings/local-address.js';
 
 export function createRoutes({ config, controller, monitor, store, commands, limiter, streamKeys, adminGuard, logger, startedAt }) {
   const router = Router();
@@ -254,6 +255,11 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
      * alap-cím a telefonon csak egy 404-nek látszik.
      */
     warnings: assessPublicUrls(config.publicUrls),
+    /**
+     * Helyi (LAN / Tailscale) elérés (1.0.101). Ezeken az alagút megkerülhető,
+     * és a WebRTC média is helyben marad — TURN nélkül is van kép.
+     */
+    local: localEndpoints({ port: config.port, whipPort: config.ingest.whepPort }),
   }));
 
   admin.get('/transitions', async (req, res) => {

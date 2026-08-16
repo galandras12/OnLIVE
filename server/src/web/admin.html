@@ -121,6 +121,15 @@
             <button class="chip" data-res="P720">720p</button>
             <button class="chip" data-res="P1080">1080p</button>
             <button class="chip" data-res="P1440">1440p</button>
+            <button class="chip" data-res="P2160">2160p</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Kép-irány <span class="hint">(csak készenlétben vált)</span></label>
+          <div class="chips" id="orientChips">
+            <button class="chip" data-orient="landscape">16:9 fekvő</button>
+            <button class="chip" data-orient="portrait">9:16 álló</button>
           </div>
         </div>
 
@@ -136,7 +145,7 @@
 
         <div class="field">
           <label>Videó bitráta <b id="bitrateValue">4500 kbps</b></label>
-          <input type="range" id="bitrate" min="500" max="12000" step="100" value="4500">
+          <input type="range" id="bitrate" min="500" max="25000" step="100" value="4500">
         </div>
 
         <div class="field">
@@ -311,12 +320,15 @@
   function renderCapture(capture) {
     document.getElementById('monCapture').textContent =
       `${capture.resolution ?? '?'}@${capture.fps ?? '?'} · ${capture.videoBitrateKbps ?? '?'} kbps · ` +
+      `${capture.orientation === 'portrait' ? '9:16' : '16:9'} · ` +
       `${capture.source ?? '?'} / ${capture.lens ?? '?'}`;
 
-    markActive('resChips', 'res', String(capture.resolution ?? '').startsWith('1440') ? 'P1440'
-      : String(capture.resolution ?? '').startsWith('1080') ? 'P1080'
-      : String(capture.resolution ?? '').startsWith('720') ? 'P720'
-      : String(capture.resolution ?? '').startsWith('480') ? 'P480' : null);
+    // A telefon címkével jelent (`1080p`), a gombok enum-nevet hordoznak
+    // (`P1080`) — a fordítás egyetlen szabály, nem elágazás-lánc.
+    const reported = String(capture.resolution ?? '');
+    const resName = /^(\d+)p$/.exec(reported) ? `P${/^(\d+)p$/.exec(reported)[1]}` : null;
+    markActive('resChips', 'res', resName);
+    markActive('orientChips', 'orient', String(capture.orientation ?? ''));
     markActive('fpsChips', 'fps', String(capture.fps ?? ''));
     markActive('lensChips', 'lens', String(capture.lens ?? ''));
     markActive('sourceChips', 'source', String(capture.source ?? ''));
@@ -360,6 +372,9 @@
   }
   for (const chip of document.querySelectorAll('#resChips .chip')) {
     chip.addEventListener('click', () => post('/api/admin/device/quality', { resolution: chip.dataset.res }));
+  }
+  for (const chip of document.querySelectorAll('#orientChips .chip')) {
+    chip.addEventListener('click', () => post('/api/admin/device/orientation', { orientation: chip.dataset.orient }));
   }
   for (const chip of document.querySelectorAll('#fpsChips .chip')) {
     chip.addEventListener('click', () => post('/api/admin/device/quality', { fps: Number(chip.dataset.fps) }));

@@ -28,8 +28,11 @@ android {
         // MediaProjection megszerzése ELŐTT kell elindítani.
         // API 35-re lépés előtt lásd docs/ANDROID.md → "TargetSdk 35".
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // A névjegy (beállítások képernyő alja) ezt a két értéket írja ki,
+        // a BuildConfig-on keresztül — tehát a kiadás verziószáma egyetlen
+        // helyen áll, nem szövegként a felületen (1.0.101).
+        versionCode = 101
+        versionName = "1.0.101"
     }
 
     buildTypes {

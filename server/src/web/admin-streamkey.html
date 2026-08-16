@@ -135,6 +135,23 @@
     <div id="urlWarnings"></div>
   </section>
 
+  <!-- ================= HELYI KAPCSOLAT ================= -->
+  <section class="card">
+    <h2>Helyi kapcsolat — LAN és Tailscale</h2>
+    <p class="hint">
+      A Cloudflare Tunnelen a WHIP <b>jelzés</b> átmegy, a WebRTC <b>média nem</b> —
+      ahhoz TURN kell. Ha viszont a telefon ugyanazon a hálózaton (vagy ugyanabban
+      a Tailscale hálózatban) van, mint a szerver, az alagút megkerülhető: a kép
+      helyben marad, TURN nélkül is van adás, és a késleltetés is kisebb.
+      Írd be ezeket a telefonon a <b>Helyi elérés</b> mezőkbe.
+    </p>
+    <table id="localTable">
+      <tr><th style="width:34%">Vezérlő szerver</th><td class="mono" id="localControl">…</td></tr>
+      <tr><th>Ingest (WHIP)</th><td class="mono" id="localIngest">…</td></tr>
+    </table>
+    <div id="localOthers"></div>
+  </section>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -380,6 +397,21 @@
       el('urlIngest').textContent = urls.ingest ?? '–';
       el('streamPath').textContent = urls.streamPath ?? 'onlive';
       el('ingestUser').textContent = urls.ingestUser ?? 'publisher';
+
+      // Helyi címek (1.0.101). A legelső a javasolt — a Tailscale-cím megy
+      // előre, mert az otthonról és útközben is működik.
+      const local = urls.local ?? {};
+      el('localControl').textContent = local.suggested?.control ?? '(nem található helyi cím)';
+      el('localIngest').textContent = local.suggested?.ingest ?? '–';
+
+      const others = el('localOthers');
+      others.textContent = '';
+      for (const candidate of (local.candidates ?? []).slice(1)) {
+        const row = document.createElement('p');
+        row.className = 'hint';
+        row.textContent = `Másik cím (${candidate.kind}, ${candidate.iface}): ${candidate.control}`;
+        others.appendChild(row);
+      }
 
       // A címek hibái (1.0.019). Szövegként tesszük be, nem HTML-ként: a
       // tartalom a .env-ből jön, oda pedig bármi kerülhet.

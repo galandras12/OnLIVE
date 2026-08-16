@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,11 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.automirrored.filled.ScreenShare
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
@@ -29,9 +31,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SliderButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -54,8 +57,11 @@ import com.galandras.onlive.settings.AppSettings
 import com.galandras.onlive.settings.CaptureSource
 import com.galandras.onlive.settings.LensKind
 import com.galandras.onlive.settings.Settings
+import com.galandras.onlive.settings.StreamOrientation
 import com.galandras.onlive.stream.ConnectionState
 import com.galandras.onlive.stream.StreamBus
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 @Composable
 fun OnLiveScreen(
@@ -79,12 +85,31 @@ fun OnLiveScreen(
     val state by StreamBus.state.collectAsState()
     val settings by appSettings.flow.collectAsState(initial = Settings())
     var showSettings by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // A kép-irány csak készenlétben váltható: élő adás közben a nézőnél
+    // átugrana a kompozíció, az OBS jelenet pedig egy arányra van szabva.
+    val idle = state.connection == ConnectionState.IDLE || state.connection == ConnectionState.ERROR
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Surface(color = Bg, modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
 
-                CameraPreview(Modifier.fillMaxSize())
+                // Az előnézet FIX arányban áll (1.0.101): pontosan azt mutatja,
+                // ami a streambe kerül. Korábban kitöltötte a kijelzőt, tehát a
+                // szélein olyan is látszott, ami az adásban már nincs benne —
+                // vagy fordítva, a kompozíció széle lemaradt.
+                Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CameraPreview(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(settings.orientation.aspect)
+                            .background(Color.Black),
+                    )
+                }
 
                 // PIP-ben csak a kép látszik, vezérlők nélkül.
                 if (!inPipMode) {
@@ -127,8 +152,22 @@ fun OnLiveScreen(
                                 source = state.source,
                                 lens = state.lens,
                                 availableLenses = state.availableLenses.map { it.kind },
+                                orientation = settings.orientation,
+                                canRotate = idle,
                                 onSelectSource = onSelectSource,
                                 onSelectLens = onSelectLens,
+                                onToggleOrientation = {
+                                    scope.launch {
+                                        appSettings.setOrientation(
+                                            if (settings.orientation.isPortrait) {
+                                                StreamOrientation.LANDSCAPE
+                                            } else {
+                                                StreamOrientation.PORTRAIT
+                                            },
+                                        )
+                                        onSettingsChanged()
+                                    }
+                                },
                             )
 
                             Spacer(Modifier.height(12.dp))
@@ -179,7 +218,10 @@ private fun CameraPreview(modifier: Modifier = Modifier) {
         modifier = modifier,
         factory = { context ->
             PreviewView(context).apply {
-                scaleType = PreviewView.ScaleType.FILL_CENTER
+                // FIT, nem FILL: a doboz már pontosan a stream arányában áll,
+                // a FILL_CENTER pedig levágná a kép szélét — vagyis az
+                // előnézet megint mást mutatna, mint ami az adásba kerül.
+                scaleType = PreviewView.ScaleType.FIT_CENTER
                 implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 StreamBus.attachPreview(surfaceProvider)
             }
@@ -265,16 +307,33 @@ private fun QuickActions(
     }
 }
 
+/**
+ * Forrás, lencse és kép-irány (1.0.101).
+ *
+ * A lencseválasztó **csúszka**: a négy optika egy tengelyen áll, a
+ * nagylátószögűtől a teleig, középen a főkamerával és a szélén az arcképessel.
+ * Ez közelebb van ahhoz, amit a kéz csinál — a chip-sorban minden váltás egy
+ * célzott koppintás volt, a csúszkán viszont végig lehet húzni az optikákon.
+ *
+ * A képernyő-megosztás **Chromecast ikont** kapott: ez az, amit a felhasználók
+ * a „másik kijelzőre küldöm a képet" jelentéssel azonosítanak.
+ */
 @Composable
 private fun SourceAndLensRow(
     source: CaptureSource,
     lens: LensKind,
     availableLenses: List<LensKind>,
+    orientation: StreamOrientation,
+    canRotate: Boolean,
     onSelectSource: (CaptureSource) -> Unit,
     onSelectLens: (LensKind) -> Unit,
+    onToggleOrientation: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AssistChip(
                 onClick = {
                     onSelectSource(
@@ -284,22 +343,72 @@ private fun SourceAndLensRow(
                 label = { Text(if (source == CaptureSource.CAMERA) "Kamera" else "Képernyő") },
                 leadingIcon = {
                     Icon(
-                        if (source == CaptureSource.CAMERA) Icons.Default.Cameraswitch else Icons.AutoMirrored.Filled.ScreenShare,
+                        if (source == CaptureSource.CAMERA) Icons.Default.Cameraswitch else Icons.Default.Cast,
                         contentDescription = null,
                     )
                 },
             )
+
+            // A forgatás csak indítás ELŐTT él: adás közben a nézőnél ugrana
+            // át a kép aránya.
+            AssistChip(
+                enabled = canRotate,
+                onClick = onToggleOrientation,
+                label = { Text(orientation.ratio) },
+                leadingIcon = {
+                    Icon(Icons.Default.ScreenRotation, contentDescription = "Kép-irány váltása")
+                },
+            )
         }
 
-        if (source == CaptureSource.CAMERA && availableLenses.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                availableLenses.forEach { kind ->
-                    FilterChip(
-                        selected = kind == lens,
-                        onClick = { onSelectLens(kind) },
-                        label = { Text(kind.label) },
-                    )
-                }
+        if (source == CaptureSource.CAMERA && availableLenses.size > 1) {
+            LensSlider(lens = lens, available = availableLenses, onSelectLens = onSelectLens)
+        }
+    }
+}
+
+/**
+ * Lencse-csúszka.
+ *
+ * A lépések a ténylegesen elérhető optikák — a lista eszközfüggő (a
+ * `CameraSource` a fizikai kamerákból állítja össze), ezért a csúszka
+ * `steps` értéke is abból jön, nem fix számból.
+ */
+@Composable
+private fun LensSlider(
+    lens: LensKind,
+    available: List<LensKind>,
+    onSelectLens: (LensKind) -> Unit,
+) {
+    // Rendezés: nagylátószögű → fő → tele, végül az arcképes. Így a csúszka
+    // egy értelmes tengely mentén halad, nem az enum deklarációs sorrendjében.
+    val order = listOf(LensKind.ULTRA_WIDE, LensKind.MAIN, LensKind.TELE, LensKind.FRONT)
+    val lenses = order.filter { it in available }
+    if (lenses.size < 2) return
+
+    val index = lenses.indexOf(lens).takeIf { it >= 0 } ?: 0
+
+    Column {
+        Slider(
+            value = index.toFloat(),
+            onValueChange = { value ->
+                val target = lenses[value.toInt().coerceIn(0, lenses.lastIndex)]
+                if (target != lens) onSelectLens(target)
+            },
+            valueRange = 0f..lenses.lastIndex.toFloat(),
+            steps = (lenses.size - 2).coerceAtLeast(0),
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            lenses.forEach { kind ->
+                Text(
+                    kind.label,
+                    color = if (kind == lens) Color.White else Color(0xFF9CA3AF),
+                    fontSize = 11.sp,
+                    fontWeight = if (kind == lens) FontWeight.Bold else FontWeight.Normal,
+                )
             }
         }
     }

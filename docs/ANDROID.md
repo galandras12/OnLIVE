@@ -193,6 +193,14 @@ leállítást (`onStop`) is kezeli (automatikus visszaváltás kamerára).
 
 ### 2.3 Kamera ↔ képernyő váltás egy gombbal
 
+A forrásváltó chip ikonja 1.0.101 óta **Chromecast** a képernyő-módhoz — ez az,
+amit a felhasználók a „másik kijelzőre küldöm a képet" jelentéssel azonosítanak.
+A lencseválasztó pedig **csúszka** lett: a ténylegesen elérhető optikák egy
+tengelyen állnak (nagylátószögű → fő → tele, a végén az arcképes), tehát végig
+lehet húzni rajtuk ahelyett, hogy minden váltás külön koppintás lenne. A lista
+eszközfüggő — a `CameraSource` a fizikai kamerákból állítja össze —, ezért a
+csúszka lépésszáma is abból jön, nem fix számból.
+
 A váltás **nem igényel WebRTC újratárgyalást**: egyetlen `VideoSource` van, és
 csak az változik, melyik capturer tolja bele a képet. A `PeerConnection`, az
 SDP és a WHIP session érintetlen — a szerver oldalon nincs szakadás.
@@ -281,6 +289,63 @@ véletlen kilépés a közvetítést szakítaná meg.
 Minden változás felmegy a vezérlő szervernek (`POST /api/session/config`), és
 3 másodpercenként telemetria is (`POST /api/session/stats`: bitráta, fps, RTT,
 csomagvesztés, uptime) — **így látszik az admin web UI-n, épp mivel megy az adás**.
+
+---
+
+## 4.2 Kép-irány: 16:9 fekvő és 9:16 álló (1.0.101)
+
+A főképernyőn a forgatás-ikonos gomb, a beállításokban a **Kép-irány** chipek,
+a web felületen az **Admin → Vezérlés → Kép-irány** — mind ugyanazt az egy
+értéket állítják.
+
+Amit fontos érteni: az irányt **nem az dönti el, ahogy a telefont tartod**. A
+capture use case-ek `targetRotation`-jét állítjuk be fixen
+(`StreamOrientation.surfaceRotation`), tehát a kép aránya akkor sem billen át,
+ha a készülék megmozdul a kézben. Enélkül az OBS jelenet és az overlay-ek — amik
+egyetlen arányra vannak szabva — menet közben elcsúsznának.
+
+- A felbontás-választás a **szenzor koordinátáiban** történik, ami mindig
+  fekvő; a 9:16-os kimenetet a forgatás adja. Ezért marad a `ResolutionSelector`
+  bemenete a fekvő méret.
+- A WebRTC felé viszont a **cserélt** méret megy
+  (`Settings.captureWidth/captureHeight`), különben a kódoló 16:9-re skálázná a
+  9:16-os képet, és fekete sávok kerülnének rá.
+- **Élő adás közben nem vált**: a telefon ilyenkor elmenti az értéket, kiírja,
+  hogy a következő indításnál lép életbe, és a főképernyőn a gomb is inaktív.
+  A szerver ugyanezt jelzi vissza a web felületen.
+- A **képernyő-megosztásra nem vonatkozik**: ott a képernyő aránya adott, azt
+  nem mi választjuk meg.
+
+Az előnézet ugyanebben az arányban áll (`Modifier.aspectRatio`), `FIT_CENTER`
+skálázással — vagyis pontosan azt mutatja, ami az adásba kerül. Korábban
+kitöltötte a kijelzőt, tehát a szélén olyan is látszott, ami a streambe már nem
+fért bele.
+
+## 4.3 Helyi elérés: LAN és Tailscale (1.0.101)
+
+A *Helyi elérés* szekcióban a szerver helyi címe adható meg, a **Kapcsolat mód**
+pedig eldönti, mikor használjuk. A döntés tiszta függvény
+(`settings/Endpoints.kt`), a hálózati próbát a `ControlApi` végzi:
+
+- `AUTO` módban egy **1,5 másodperces** próba fut a helyi `/api/session/ping`-re
+  (külön, rövid időzítésű OkHttp kliens — a rendes 8 másodperc itt azt
+  jelentené, hogy mobilneten ennyit áll a „Kezdés" gomb), és az eredmény
+  30 másodpercig érvényes;
+- bármilyen HTTP válasz „elérhető"-nek számít: a 401 kulcs-probléma, nem
+  útvonal-probléma, azon az alagút sem segítene;
+- a választás **indoka** felkerül a főképernyőre és a kapcsolat-teszt
+  eredményébe is — a néma útvonalválasztás pont olyan nehezen kereshető hiba
+  lenne, mint amilyeneket eddig javítottunk.
+
+Miért éri meg: a Cloudflare Tunnelen a WHIP jelzés átmegy, a **média nem**
+(lásd [`NETWORKING.md`](NETWORKING.md) 3. fejezet). Helyi úton viszont a kép a
+hálózaton belül marad — TURN nélkül is van adás, és kisebb a késleltetés.
+
+## 4.4 Névjegy (1.0.101)
+
+A beállítások alján az alkalmazás neve és verziója áll, a `BuildConfig`-ból
+(`versionName` / `versionCode`), nem a felületre írt szövegként — így a kiadás
+verziószáma egyetlen helyen él, a `app/build.gradle.kts`-ben.
 
 ---
 

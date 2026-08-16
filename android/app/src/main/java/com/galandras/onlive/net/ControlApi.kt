@@ -2,6 +2,9 @@ package com.galandras.onlive.net
 
 import android.os.Build
 import android.util.Log
+import com.galandras.onlive.settings.ConnectionMode
+import com.galandras.onlive.settings.Endpoints
+import com.galandras.onlive.settings.ResolvedEndpoints
 import com.galandras.onlive.settings.Settings
 import com.galandras.onlive.stream.StreamStats
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +40,68 @@ class ControlApi(
         .readTimeout(8, TimeUnit.SECONDS)
         .build(),
 ) {
+
+    /**
+     * A helyi cím próbájához KÜLÖN, rövid időzítésű kliens (1.0.101).
+     *
+     * A 8 másodperces alap-időzítés itt elfogadhatatlan: `AUTO` módban ez a
+     * próba minden adásindítás előtt lefut, és ha a telefon épp mobilneten van
+     * (tehát a LAN-cím elérhetetlen), akkor 8 másodpercig állna a „Kezdés"
+     * gomb, mielőtt az alagútra váltana. Egy nem válaszoló helyi címről 1,5
+     * másodperc alatt is kiderül minden, amit tudni kell.
+     */
+    private val probeClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(1500, TimeUnit.MILLISECONDS)
+        .readTimeout(1500, TimeUnit.MILLISECONDS)
+        .build()
+
+    /** A legutóbbi próba eredménye — hogy ne mérjünk minden kérésnél. */
+    private var localProbe: Pair<String, Boolean>? = null
+    private var localProbeAt = 0L
+
+    /**
+     * Melyik címeket használjuk MOST.
+     *
+     * `AUTO` módban megméri, válaszol-e a helyi cím, és a mérést rövid ideig
+     * megjegyzi. A [Endpoints.choose] maga tiszta függvény — itt csak a mérés
+     * történik.
+     */
+    suspend fun resolveEndpoints(settings: Settings): ResolvedEndpoints {
+        val needsProbe = settings.connectionMode == ConnectionMode.AUTO && settings.hasLocalEndpoints
+        val reachable = if (needsProbe) isLocalReachable(settings) else false
+        return Endpoints.choose(settings, reachable)
+    }
+
+    /** A gyorsítótár eldobása — hálózatváltásnál és adásindításnál hívjuk. */
+    fun forgetLocalProbe() {
+        localProbe = null
+    }
+
+    private suspend fun isLocalReachable(settings: Settings): Boolean = withContext(Dispatchers.IO) {
+        val base = settings.localControlBaseUrl.trim().trimEnd('/')
+        if (base.isBlank()) return@withContext false
+
+        val cached = localProbe
+        if (cached != null && cached.first == base &&
+            System.currentTimeMillis() - localProbeAt < PROBE_TTL_MS
+        ) {
+            return@withContext cached.second
+        }
+
+        // Bármilyen HTTP válasz jó: azt méri, hogy a szerver ELÉRHETŐ-e ezen a
+        // címen. Ha 401-et ad, az kulcs-probléma, nem útvonal-probléma — az
+        // alagúton ugyanúgy 401 lenne, tehát nincs értelme miatta váltani.
+        val reachable = runCatching {
+            probeClient.newCall(
+                Request.Builder().url("$base/api/session/ping").get().build(),
+            ).execute().use { true }
+        }.getOrDefault(false)
+
+        localProbe = base to reachable
+        localProbeAt = System.currentTimeMillis()
+        Log.i(TAG, "Helyi cím próbája: $base → ${if (reachable) "elérhető" else "nem válaszol"}")
+        reachable
+    }
 
     suspend fun sessionStart(settings: Settings): Result<Unit> =
         post(settings, "start", settingsPayload(settings))
@@ -89,8 +154,9 @@ class ControlApi(
         .put("source", s.source.name.lowercase())
         .put("lens", s.lens.name.lowercase())
         .put("resolution", s.resolution.label)
-        .put("width", s.resolution.width)
-        .put("height", s.resolution.height)
+        .put("orientation", s.orientation.wire)
+        .put("width", s.captureWidth)
+        .put("height", s.captureHeight)
         .put("fps", s.frameRate.fps)
         .put("videoBitrateKbps", s.videoBitrateKbps)
         .put(
@@ -109,7 +175,7 @@ class ControlApi(
         body: JSONObject,
     ): Result<List<RemoteCommand>> = withContext(Dispatchers.IO) {
         runCatching {
-            val url = "${settings.controlBaseUrl.trimEnd('/')}/api/session/$endpoint"
+            val url = "${resolveEndpoints(settings).control}/api/session/$endpoint"
             val request = Request.Builder()
                 .url(url)
                 .post(body.toString().toRequestBody(JSON))
@@ -139,7 +205,8 @@ class ControlApi(
      */
     suspend fun ping(settings: Settings): Result<PingResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val base = settings.controlBaseUrl.trim().trimEnd('/')
+            val resolved = resolveEndpoints(settings)
+            val base = resolved.control.trim().trimEnd('/')
             require(base.isNotBlank()) { "Nincs megadva a vezérlő szerver címe." }
 
             val pingUrl = "$base/api/session/ping"
@@ -160,8 +227,11 @@ class ControlApi(
                         val json = JSONObject(body)
                         PingResult(
                             state = json.optString("state", "ismeretlen"),
-                            whipUrl = json.optString("whipUrl", settings.whipUrl),
+                            // A szerver a PUBLIKUS WHIP címét mondja meg; ha
+                            // helyi úton értük el, a helyi cím a mérvadó.
+                            whipUrl = if (resolved.isLocal) resolved.whip else json.optString("whipUrl", settings.whipUrl),
                             streamPath = json.optString("streamPath", settings.streamPath),
+                            route = resolved.reason,
                         )
                     }
                     401 -> error("A streamkulcs nem jó. A webes felületen (Streamkulcs fül) hozz létre újat.")
@@ -200,7 +270,7 @@ class ControlApi(
     private suspend fun post(settings: Settings, endpoint: String, body: JSONObject): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val url = "${settings.controlBaseUrl.trimEnd('/')}/api/session/$endpoint"
+                val url = "${resolveEndpoints(settings).control}/api/session/$endpoint"
                 val request = Request.Builder()
                     .url(url)
                     .post(body.toString().toRequestBody(JSON))
@@ -225,6 +295,13 @@ class ControlApi(
 
     companion object {
         private const val TAG = "OnLIVE/Control"
+
+        /**
+         * Ennyi ideig hisszük el a helyi cím próbájának eredményét. Elég
+         * rövid ahhoz, hogy egy hálózatváltás után magától helyreálljon,
+         * és elég hosszú ahhoz, hogy ne mérjünk minden telemetria-körnél.
+         */
+        private const val PROBE_TTL_MS = 30_000L
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
@@ -234,6 +311,8 @@ data class PingResult(
     val state: String,
     val whipUrl: String,
     val streamPath: String,
+    /** Melyik úton ment a kérés — helyi vagy alagút (1.0.101). */
+    val route: String = "",
 )
 
 /**
@@ -255,6 +334,7 @@ data class RemoteCommand(
         const val SET_LENS = "setLens"
         const val SET_SOURCE = "setSource"
         const val SET_QUALITY = "setQuality"
+        const val SET_ORIENTATION = "setOrientation"
         const val TORCH = "torch"
         const val PHOTO = "photo"
         const val RECORDING = "recording"

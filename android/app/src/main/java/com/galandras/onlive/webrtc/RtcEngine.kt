@@ -111,7 +111,12 @@ class RtcEngine(
      * Felépíti a PeerConnectiont, és WHIP-en publikál.
      * Hiba esetén dob — az újrapróbálkozás a hívó (StreamService) dolga.
      */
-    suspend fun publish(settings: Settings) {
+    /**
+     * @param whipUrl a ténylegesen használandó publish cím. Alapból a
+     *   publikus (Tunnel) cím, de helyi (LAN / Tailscale) úton más — a
+     *   döntést a hívó hozza meg (settings/Endpoints.kt, 1.0.101).
+     */
+    suspend fun publish(settings: Settings, whipUrl: String = settings.whipUrl) {
         close(sendDelete = false)
 
         val iceServers = buildList {
@@ -166,9 +171,11 @@ class RtcEngine(
 
         // --- Videó: egyetlen forrás, amibe a kamera VAGY a képernyő tolja a képet ---
         val vSource = factory.createVideoSource(false).also { videoSource = it }
+        // A választott irány szerinti méret: álló módban a két oldal cserél,
+        // különben a kódoló 16:9-re skálázná a 9:16-os képet (1.0.101).
         vSource.adaptOutputFormat(
-            settings.resolution.width,
-            settings.resolution.height,
+            settings.captureWidth,
+            settings.captureHeight,
             settings.frameRate.fps,
         )
         val vTrack = factory.createVideoTrack(VIDEO_TRACK_ID, vSource).also { videoTrack = it }
@@ -211,7 +218,7 @@ class RtcEngine(
         )
 
         ingestUser = settings.ingestUser
-        val session = whip.publish(settings.whipUrl, mungedOffer, settings.streamKey, ingestUser)
+        val session = whip.publish(whipUrl, mungedOffer, settings.streamKey, ingestUser)
         resourceUrl = session.resourceUrl
 
         setRemoteDescription(
@@ -226,7 +233,7 @@ class RtcEngine(
 
         capturerObserver?.onCapturerStarted(true)
         onCapturerObserverChanged?.invoke(capturerObserver)
-        Log.i(TAG, "Publish elindult: ${settings.whipUrl}")
+        Log.i(TAG, "Publish elindult: $whipUrl")
     }
 
     /** Menet közbeni bitráta-módosítás, újratárgyalás nélkül. */

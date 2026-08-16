@@ -92,6 +92,21 @@ WHIP jelzés és a média is gond nélkül átmegy, portnyitás nélkül.
 - Előny: a legkevesebb mozgó alkatrész a médiaút szempontjából, alacsony késleltetés.
 - Hátrány: a telefonnak be kell lépnie a tailnetbe (egyszeri beállítás), és a
   publikus `/live` oldalhoz így is kell a Cloudflare Tunnel.
+- **1.0.101 óta ez az app beállításaiban is szerepel**: a *Helyi elérés — LAN /
+  Tailscale* szekcióba a szerver Tailscale- vagy LAN-címe kerül
+  (`http://100.x.y.z:8080` és `:8889`), a **Kapcsolat mód** pedig eldönti,
+  mikor melyiket használjuk:
+
+  | Mód | Mit csinál |
+  |---|---|
+  | Automatikus | megnézi, válaszol-e a helyi cím (1,5 mp), és ha igen, azon megy — különben az alagúton |
+  | Csak helyi | kizárólag LAN / Tailscale |
+  | Csak Tunnel | kizárólag a publikus címek |
+
+  A címeket nem kell kitalálni: a szerver kiírja őket az **admin → Streamkulcs**
+  fülön (a Tailscale-cím megy előre, mert az útközben is működik). Az app a
+  próba eredményét 30 másodpercig jegyzi meg, tehát egy hálózatváltás után
+  magától helyreáll.
 - Gyakorlati javaslat: **ingest Tailscale-en, admin + live Cloudflare Tunnelen** —
   ez a két világ legjobb kombinációja, ha a telefon a sajátunk.
 

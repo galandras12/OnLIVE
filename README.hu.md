@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.019 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.101 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -198,3 +198,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.017`](CHANGELOG.hu.md#10017--configbat-a-beállítás-többé-nem-fájlszerkesztés) | — | `config.bat`: a beállítás többé nem fájlszerkesztés |
 | [`1.0.018`](CHANGELOG.hu.md#10018--feloldatlan-merge-konfliktus-a-gradleproperties-ben) | — | Feloldatlan merge-konfliktus a `gradle.properties`-ben |
 | [`1.0.019`](CHANGELOG.hu.md#10019--a-404-ami-nem-a-szerverről-szólt) | — | A 404, ami nem a szerverről szólt |
+| [`1.0.101`](CHANGELOG.hu.md#10101--álló-és-fekvő-adás-lencse-csúszka-helyi-útvonal) | — | Álló és fekvő adás, lencse-csúszka, helyi útvonal |

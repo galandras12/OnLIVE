@@ -136,6 +136,10 @@ class CameraSource(
     private suspend fun bind(settings: Settings, lens: LensKind) = withContext(Dispatchers.Main) {
         val cameraProvider = provider ?: awaitProvider().also { provider = it }
 
+        // A felbontás-választás a SZENZOR koordinátáiban történik, ami mindig
+        // fekvő — a 9:16-os kimenetet nem itt, hanem a targetRotation adja
+        // (1.0.101). Ha itt cserélnénk meg az oldalakat, a CameraX nem találna
+        // illeszkedő méretet, és a legközelebbi rosszabbra esne vissza.
         val size = Size(settings.resolution.width, settings.resolution.height)
         val resolutionSelector = ResolutionSelector.Builder()
             .setAspectRatioStrategy(AspectRatioStrategy.RATIO_16_9_FALLBACK_AUTO_STRATEGY)
@@ -146,6 +150,10 @@ class CameraSource(
 
         val previewUseCase = Preview.Builder()
             .setResolutionSelector(resolutionSelector)
+            // A kép-irányt a BEÁLLÍTÁS dönti el, nem az, ahogy a telefont
+            // tartod (1.0.101). A felbontás-választás a szenzor koordinátáiban
+            // (fekvőben) történik, a forgatás ettől független metaadat.
+            .setTargetRotation(settings.orientation.surfaceRotation)
             .apply {
                 // A kért fps rögzítése a Camera2 AE-tartományon keresztül.
                 Camera2Interop.Extender(this).setCaptureRequestOption(
@@ -157,6 +165,7 @@ class CameraSource(
 
         val analysisUseCase = ImageAnalysis.Builder()
             .setResolutionSelector(resolutionSelector)
+            .setTargetRotation(settings.orientation.surfaceRotation)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
             .build()
@@ -170,7 +179,9 @@ class CameraSource(
                 )
             )
             .build()
-        val videoUseCase = VideoCapture.withOutput(recorder)
+        val videoUseCase = VideoCapture.withOutput(recorder).apply {
+            targetRotation = settings.orientation.surfaceRotation
+        }
 
         val selector = selectorFor(lens)
 
@@ -198,7 +209,11 @@ class CameraSource(
         lenses.firstOrNull { it.kind == lens }?.let(::applyZoom)
 
         StreamBus.update { it.copy(lens = lens, availableLenses = lenses) }
-        Log.i(TAG, "Kamera elindult: lencse=$lens, ${size.width}x${size.height}@${settings.frameRate.fps}")
+        Log.i(
+            TAG,
+            "Kamera elindult: lencse=$lens, ${size.width}x${size.height}" +
+                "@${settings.frameRate.fps}, irány=${settings.orientation.ratio}",
+        )
     }
 
     suspend fun stop() = withContext(Dispatchers.Main) {
