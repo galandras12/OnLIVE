@@ -18,7 +18,7 @@ import { DeviceCommands } from '../device/commands.js';
 import { LogEvent, Source, clientId, describeChanges, diffSettings } from '../log/logger.js';
 import { hookAuth, phoneAuth } from './auth.js';
 
-export function createRoutes({ config, controller, monitor, store, commands, limiter, adminGuard, logger, startedAt }) {
+export function createRoutes({ config, controller, monitor, store, commands, limiter, streamKeys, adminGuard, logger, startedAt }) {
   const router = Router();
 
   // =========================================================================
@@ -26,7 +26,7 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   // =========================================================================
 
   const session = Router();
-  session.use(phoneAuth(config, logger, limiter));
+  session.use(phoneAuth(config, logger, limiter, streamKeys));
 
   session.post('/start', (req, res) => {
     if (req.body && Object.keys(req.body).length) controller.updateCapture(req.body);
@@ -94,6 +94,26 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
     res.json({ commands: commands.pull() });
   });
 
+  /**
+   * Kapcsolat-teszt a telefon beállítás-képernyőjéről (1.0.010).
+   *
+   * Ha ide 200 érkezik, akkor a Tunnel-cím és a streamkulcs is helyes — a
+   * felhasználónak nem kell adást indítania ahhoz, hogy kiderüljön, elgépelte-e
+   * a kulcsot. A válasz elárulja a WHIP célcímet is, hogy a telefonon látszódjon,
+   * hova fog publikálni.
+   */
+  session.get('/ping', (req, res) => {
+    res.json({
+      ok: true,
+      server: 'OnLIVE',
+      state: controller.machine.state,
+      streamPath: config.ingest.path,
+      ingestUser: config.ingest.user,
+      whipUrl: `${config.publicUrls.ingest}/${config.ingest.path}/whip`,
+      at: new Date().toISOString(),
+    });
+  });
+
   router.use('/api/session', session);
 
   // =========================================================================
@@ -115,6 +135,73 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   ingest.post('/notready', hookHandler('notready'));
 
   router.use('/api/ingest', ingest);
+
+  /**
+   * A MediaMTX külső hitelesítése (`authMethod: http`, 1.0.010).
+   *
+   * EZ TESZI LEHETŐVÉ, hogy a streamkulcs sehol ne legyen nyersen tárolva:
+   * a MediaMTX nem a saját felhasználólistájából dolgozik, hanem minden
+   * publikálási kísérletnél ide kérdez, mi pedig a scrypt hash ellen
+   * ellenőrzünk. A `mediamtx.yml`-be így nem kerül titok.
+   *
+   * A hookAuth-on KÍVÜL van: a MediaMTX nem a mi hook titkunkat küldi, hanem a
+   * saját hitelesítési kérését. Cserébe a végpont csak localhostról hívható —
+   * a MediaMTX ugyanezen a gépen fut.
+   *
+   * Válasz: 200 = mehet, 401 = tilos. Ha a vezérlő szerver áll, a MediaMTX
+   * minden kérést elutasít — ilyenkor amúgy sincs kinek adást vezérelni.
+   */
+  router.post('/api/ingest/auth', (req, res) => {
+    const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(
+      req.ip ?? req.socket?.remoteAddress ?? '',
+    );
+    if (!local) return res.status(401).json({ error: 'Csak helyi hívás.' });
+
+    const { user, password, action, path: streamPath, ip } = req.body ?? {};
+
+    // Olvasás, API, metrikák: a MediaMTX ezekre is kérdez. Ezek localhostra
+    // vannak kötve (a lejátszás a mi proxynkon megy), ezért engedjük.
+    if (action !== 'publish') return res.json({ ok: true });
+
+    const client = String(ip ?? 'ismeretlen');
+    const limited = limiter?.check(`whip:${client}`);
+    if (limited && !limited.allowed) {
+      logger.warn(`WHIP publish zárlat alatt innen: ${client}`);
+      return res.status(401).json({ error: 'Túl sok sikertelen próbálkozás.' });
+    }
+
+    const pathOk = String(streamPath ?? '') === config.ingest.path;
+    const userOk = String(user ?? '') === config.ingest.user;
+    const keyOk = streamKeys?.configured
+      ? streamKeys.verify(password ?? '')
+      : true; // kulcs nélküli (fejlesztői) állapot — az indulási napló figyelmeztet
+
+    if (pathOk && userOk && keyOk) {
+      limiter?.succeed(`whip:${client}`);
+      streamKeys?.markUsed();
+      logger.event({
+        type: LogEvent.INGEST,
+        level: 'ok',
+        source: Source.PHONE,
+        client,
+        message: `WHIP publikálás engedélyezve (${streamPath}).`,
+        action,
+      });
+      return res.json({ ok: true });
+    }
+
+    limiter?.fail(`whip:${client}`);
+    logger.event({
+      type: LogEvent.AUTH,
+      level: 'warn',
+      source: Source.INGEST,
+      client,
+      message: 'WHIP publikálás elutasítva.',
+      reason: !pathOk ? 'ismeretlen útvonal' : !userOk ? 'ismeretlen felhasználó' : 'hibás streamkulcs',
+      path: streamPath ?? null,
+    });
+    return res.status(401).json({ error: 'Érvénytelen streamkulcs.' });
+  });
 
   // =========================================================================
   //  Admin vezérlés (a teljes hitelesítés: 10. szegmens)
@@ -147,6 +234,21 @@ export function createRoutes({ config, controller, monitor, store, commands, lim
   }
 
   admin.get('/state', (req, res) => res.json(controller.snapshot()));
+
+  /**
+   * A telefon beállításához szükséges címek egy helyen (1.0.010).
+   *
+   * A streamkulcs-oldal ebből mutatja meg, mit kell az appba beírni — így nem
+   * kézzel másolt, elavuló szöveg áll a felületen.
+   */
+  admin.get('/endpoints', (req, res) => res.json({
+    admin: config.publicUrls.admin,
+    live: config.publicUrls.live,
+    ingest: config.publicUrls.ingest,
+    streamPath: config.ingest.path,
+    ingestUser: config.ingest.user,
+    whipUrl: `${config.publicUrls.ingest}/${config.ingest.path}/whip`,
+  }));
 
   admin.get('/transitions', async (req, res) => {
     const limit = Math.min(Number.parseInt(req.query.limit ?? '100', 10) || 100, 1000);

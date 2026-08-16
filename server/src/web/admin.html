@@ -23,6 +23,7 @@
     <button class="tab" data-panel="media">Média</button>
     <button class="tab" data-panel="obs">OBS</button>
     <button class="tab" data-panel="monitor">Monitor és linkek</button>
+    <button class="tab" data-panel="streamkey">Streamkulcs</button>
   </nav>
   <div class="spacer"></div>
   <span class="pill" id="securityPill" title="Biztonsági helyzetkép">védelem: …</span>
@@ -173,6 +174,11 @@
   <!-- ================= MONITOR ÉS LINKEK (9. szegmens) ================= -->
   <section class="panel" id="panel-monitor">
     <iframe class="frame tall" id="monitorFrame" data-src="/admin/monitor"></iframe>
+  </section>
+
+  <!-- ================= STREAMKULCS (1.0.010) ================= -->
+  <section class="panel" id="panel-streamkey">
+    <iframe class="frame tall" id="streamkeyFrame" data-src="/admin/stream-key"></iframe>
   </section>
 
 </main>
@@ -416,8 +422,7 @@
 
       pill.className = 'pill ' + (weak.length ? 'off' : 'on');
       pill.textContent = weak.length ? `védelem: ${weak.length} figyelmeztetés` : 'védelem: rendben';
-      pill.title = weak.map((item) => item.message).join('
-') || 'Minden titok erős.';
+      pill.title = weak.map((item) => item.message).join('\n') || 'Minden titok erős.';
     } catch { /* csend */ }
   }
 

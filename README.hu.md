@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.010 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -12,10 +12,14 @@ szerveren és a web UI-n van.
 
 ## 1.0 verzió
 
-Az 1.0 lezárja a projekt alap szakaszát: a tervezett tizenegy szegmens
+Az 1.0 lezárta a projekt alap szakaszát: a tervezett tizenegy szegmens
 (`0.1` – `0.11`) elkészült, tehát a rendszer végponttól végpontig használható —
 a telefonon megnyomott „Kezdés"-től a kompozit kép OBS-ben való megjelenéséig,
 naplózással, hitelesítéssel és dokumentált tesztelési tervvel.
+
+Az **1.0.010** hozza a streamkulcs webes kezelését (ott jön létre, és csak a
+scrypt hash-e tárolódik), valamint az Android app fogaskereke mögötti valódi
+beállítás-képernyőt, ahol a kulcsot és a Tunnel címeit meg lehet adni.
 
 A szegmensenkénti történet a [`CHANGELOG.hu.md`](CHANGELOG.hu.md) fájlban van, a
 géppel olvasható verziószám pedig a [`versions.onlive`](versions.onlive)-ban.
@@ -59,11 +63,15 @@ powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<str
 # 3) vezérlő szerver
 cd ..\..\server
 npm install
-npm run keygen                              # streamkulcs, live token, hook titok
+npm run keygen                              # live token, hook titok
 npm run hash-password -- "hosszú jelszó"    # admin jelszó hash
 npm test
 npm start
 ```
+
+Ezután hozd létre a streamkulcsot a webes felületen — **Admin → Streamkulcs** —,
+és írd be a telefonon a fogaskerék mögötti **Kapcsolat** szekcióba. A szerver
+csak a hash-ét tárolja, ezért másold ki, amíg látszik.
 
 Ezek után a napi indítás egyetlen mozdulat: **`start.bat`** a projekt gyökerében
 (tunnel-ellenőrzés → MediaMTX → vezérlő szerver, nyitva maradó konzollal).
@@ -107,3 +115,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`0.10`](CHANGELOG.hu.md#010--biztonság-és-hitelesítés) | 10. | Biztonság és hitelesítés |
 | [`0.11`](CHANGELOG.hu.md#011--telepítés-üzemeltetés-tesztelési-terv) | 11. | Telepítés, üzemeltetés, tesztelési terv |
 | [`1.0.000`](CHANGELOG.hu.md#10000--az-alap-szakasz-lezárása) | — | **Az alap szakasz lezárása** |
+| [`1.0.010`](CHANGELOG.hu.md#10010--streamkulcs-a-webes-felületen-kapcsolat-beállítás-a-telefonon) | — | Streamkulcs a webes felületen, kapcsolat-beállítás a telefonon |

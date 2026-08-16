@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -36,7 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +42,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,21 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.galandras.onlive.settings.AppSettings
-import com.galandras.onlive.settings.AudioBitrate
-import com.galandras.onlive.settings.AudioSampleRate
 import com.galandras.onlive.settings.CaptureSource
-import com.galandras.onlive.settings.FrameRate
 import com.galandras.onlive.settings.LensKind
 import com.galandras.onlive.settings.Settings
-import com.galandras.onlive.settings.VideoBitrate
-import com.galandras.onlive.settings.VideoResolution
 import com.galandras.onlive.stream.ConnectionState
 import com.galandras.onlive.stream.StreamBus
-import kotlinx.coroutines.launch
-
-private val Live = Color(0xFFE11D48)
-private val Warn = Color(0xFFF59E0B)
-private val Bg = Color(0xFF0B0D10)
 
 @Composable
 fun OnLiveScreen(
@@ -160,12 +146,15 @@ fun OnLiveScreen(
             }
         }
 
+        // A fogaskerék teljes képernyős beállításokra visz (1.0.010): ott van a
+        // streamkulcs és a Cloudflare Tunnel címe is, amikhez egy párbeszédablak
+        // szűk volt. Az adás ettől nem szakad meg — a capture a Service-ben fut.
         if (showSettings) {
-            SettingsDialog(
+            SettingsScreen(
                 settings = settings,
                 appSettings = appSettings,
                 onApply = onSettingsChanged,
-                onDismiss = { showSettings = false },
+                onClose = { showSettings = false },
             )
         }
 
@@ -350,103 +339,6 @@ private fun MainControls(
             ) { Text("Befejezés", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
         }
     }
-}
-
-@Composable
-private fun SettingsDialog(
-    settings: Settings,
-    appSettings: AppSettings,
-    onApply: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    var bitrate by remember(settings.videoBitrateKbps) {
-        mutableStateOf(settings.videoBitrateKbps.toFloat())
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                scope.launch {
-                    appSettings.setVideoBitrate(bitrate.toInt())
-                    onApply()
-                    onDismiss()
-                }
-            }) { Text("Alkalmaz") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Mégse") } },
-        title = { Text("Minőség") },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Felbontás", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VideoResolution.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == settings.resolution,
-                            onClick = { scope.launch { appSettings.setResolution(option) } },
-                            label = { Text(option.label) },
-                        )
-                    }
-                }
-
-                Text("Képfrissítés", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FrameRate.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == settings.frameRate,
-                            onClick = { scope.launch { appSettings.setFrameRate(option) } },
-                            label = { Text(option.label) },
-                        )
-                    }
-                }
-
-                Text("Videó bitráta: ${bitrate.toInt()} kbps", fontWeight = FontWeight.Bold)
-                Slider(
-                    value = bitrate,
-                    onValueChange = { bitrate = it },
-                    valueRange = VideoBitrate.MIN_KBPS.toFloat()..VideoBitrate.MAX_KBPS.toFloat(),
-                    steps = 22,
-                )
-                Text(
-                    "Ajánlott: ${VideoBitrate.recommendedKbps(settings.resolution, settings.frameRate)} kbps",
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                )
-
-                Text("Hang mintavétel", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AudioSampleRate.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == settings.audioSampleRate,
-                            onClick = { scope.launch { appSettings.setAudioSampleRate(option) } },
-                            label = { Text(option.label) },
-                        )
-                    }
-                }
-
-                Text("Hang bitráta", fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AudioBitrate.entries.forEach { option ->
-                        FilterChip(
-                            selected = option == settings.audioBitrate,
-                            onClick = { scope.launch { appSettings.setAudioBitrate(option) } },
-                            label = { Text(option.label) },
-                        )
-                    }
-                }
-
-                Text(
-                    "Ingest: ${settings.whipUrl}",
-                    fontSize = 11.sp,
-                    color = Color.Gray,
-                )
-            }
-        },
-    )
 }
 
 @Composable

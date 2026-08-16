@@ -13,7 +13,7 @@ import { clientKey } from '../security/rate-limit.js';
 import { buildCookie, parseCookies } from '../security/sessions.js';
 import { CSRF_HEADER, SESSION_COOKIE } from './auth.js';
 
-export function createAuthRoutes({ config, sessions, limiter, adminGuard, logger }) {
+export function createAuthRoutes({ config, sessions, limiter, streamKeys, adminGuard, logger }) {
   const router = Router();
 
   /** A süti csak HTTPS-en menjen — a tunnel mögött az X-Forwarded-Proto dönt. */
@@ -113,10 +113,25 @@ export function createAuthRoutes({ config, sessions, limiter, adminGuard, logger
           ? { level: 'strong', message: 'Admin jelszó: hash-elve tárolva.' }
           : assessSecret(config.adminPassword, { name: 'Admin jelszó', minLength: 12 }),
       },
-      ingest: {
-        streamKeyConfigured: Boolean(config.streamKey),
-        assessment: assessSecret(config.streamKey, { name: 'Streamkulcs', minLength: 20 }),
-      },
+      ingest: (() => {
+        // 1.0.010: a kulcs a felületen jön létre és hash-elve tárolódik, ezért
+        // az erősségét nem az értékéből ítéljük meg (nincs is meg), hanem
+        // abból, hogy a szabályokat kikényszerítő úton keletkezett-e.
+        const status = streamKeys?.status() ?? { source: 'nincs' };
+        const assessment = {
+          felulet: { level: 'strong', message: 'Streamkulcs: a felületen létrehozva, hash-elve tárolva.' },
+          env: { level: 'fair', message: 'Streamkulcs: még a .env-ből jön — hozz létre újat a felületen.' },
+          nincs: { level: 'missing', message: 'Nincs streamkulcs — bárki publikálhat!' },
+        }[status.source];
+
+        return {
+          streamKeyConfigured: status.source !== 'nincs',
+          source: status.source,
+          createdAt: status.createdAt ?? null,
+          lastUsedAt: status.lastUsedAt ?? null,
+          assessment,
+        };
+      })(),
       live: {
         tokenConfigured: Boolean(config.liveToken),
         assessment: config.liveToken

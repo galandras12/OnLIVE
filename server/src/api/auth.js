@@ -38,13 +38,16 @@ const isMutating = (req) => !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
 /**
  * A telefon: `Authorization: Bearer <streamKey>`.
  *
+ * A kulcsot az 1.0.010 óta a **hash-elt tár** ellenőrzi (`streamKeys`), nem a
+ * `.env` nyers értéke — az már csak tartalék a régi telepítésekhez.
+ *
  * Sebességkorlátozott: a `/api/session/*` a publikus admin subdomainen is
  * elérhető, tehát a streamkulcs is próbálgatható lenne.
  */
-export function phoneAuth(config, logger, limiter) {
+export function phoneAuth(config, logger, limiter, streamKeys) {
   return (req, res, next) => {
-    if (!config.streamKey) {
-      logger.warn('Nincs beállítva ONLIVE_STREAM_KEY — a session API védtelen!');
+    if (!streamKeys?.configured) {
+      logger.warn('Nincs beállítva streamkulcs — a session API védtelen! (/admin → Streamkulcs)');
       return next();
     }
 
@@ -55,8 +58,9 @@ export function phoneAuth(config, logger, limiter) {
       return res.status(429).json({ error: 'Túl sok sikertelen próbálkozás.' });
     }
 
-    if (constantTimeEquals(bearerToken(req) ?? '', config.streamKey)) {
+    if (streamKeys.verify(bearerToken(req) ?? '')) {
       limiter?.succeed(key);
+      streamKeys.markUsed();
       return next();
     }
 

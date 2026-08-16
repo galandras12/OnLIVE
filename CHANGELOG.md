@@ -12,6 +12,71 @@ mapping between the two.
 
 ---
 
+## 1.0.010 — Stream key on the web, connection settings on the phone
+
+*2026-08-16*
+
+Until now the stream key lived in `.env` as plain text, and the same value had
+to be copied into the MediaMTX configuration by hand. From this version it is
+created on the web UI and **only its hash is stored**.
+
+### Stream key management (web UI)
+
+- New **Stream key** tab in the admin surface: generate a key (32 characters,
+  cryptographic randomness) or enter your own.
+- Requirements, enforced on both sides: **at least 16 characters**, with
+  lowercase, uppercase, a digit and a special character. The form marks each
+  rule as you type; the server validates again on save, so bypassing the UI
+  does not let a weak key through.
+- The raw key leaves the server **exactly once** — in the response that created
+  it, which the page shows once with a copy button. After that it cannot be
+  read back from anywhere.
+- Storage is a **scrypt hash** (`data/stream-key.json`), the same primitive as
+  the admin password. No fingerprint or "reminder" of the key is stored either:
+  a fast hash next to the file would undo the very slowness scrypt is there for.
+- Creating a new key invalidates the old one immediately. The status panel shows
+  when the key was created and last used — never the value.
+
+### MediaMTX no longer stores a password
+
+The reason the "hashed only" claim holds end to end: MediaMTX now delegates
+every authentication question to the control server (`authMethod: http` →
+`POST /api/ingest/auth`), which checks it against the hash. Nothing secret goes
+into `mediamtx.yml` any more.
+
+The endpoint is callable from localhost only, and failed publish attempts feed
+the same per-IP lockout as the login. One operational consequence, documented:
+if the control server is down, MediaMTX denies every publish — so a "401 on
+WHIP" means a stopped Node server before it means a bad key.
+
+### Android: the gear now opens a real settings screen
+
+- The gear icon leads to a full-screen settings page instead of the cramped
+  quality dialog.
+- **Connection** section: stream key (masked, with a reveal toggle) and the
+  Cloudflare Tunnel addresses — control server, ingest, stream path, ingest
+  user.
+- **Test connection** button: one `GET /api/session/ping` tells you whether the
+  address and the key are right, without having to start a broadcast. Errors are
+  specific — a wrong key points you back at the web UI.
+- **TURN** and **Quality** sections alongside it; the system Back button closes
+  the settings rather than the app.
+
+### Fixed
+
+- **The entire admin page's JavaScript was dead in the browser.** A line break
+  had slipped inside a quoted string in `admin.html` (`join('` … `')`) back in
+  segment 10, so the whole inline script failed to parse: tabs, start/stop
+  buttons, live state and the security pill did nothing. Found with a real
+  headless browser while testing this release.
+- New test file (`test/web-pages.test.js`) parses every inline script in every
+  served page, so a syntax error can never ship silently again. Verified against
+  the old broken file: it fails there.
+
+**146 tests, all green.**
+
+---
+
 ## 1.0.000 — Base phase closed
 
 *2026-08-16*

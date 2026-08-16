@@ -62,6 +62,8 @@ export const config = {
   ingest: {
     apiBase: process.env.ONLIVE_MEDIAMTX_API ?? 'http://127.0.0.1:9997',
     path: process.env.ONLIVE_STREAM_PATH ?? 'onlive',
+    /** A MediaMTX publish-felhasználója (HTTP Basic név a telefon oldalán). */
+    user: process.env.ONLIVE_INGEST_USER ?? 'publisher',
     /** WHEP (WebRTC olvasás) — a lejátszás-proxy célja. */
     whepPort: num(process.env.ONLIVE_MEDIAMTX_WHIP_PORT, 8889),
     /** HLS — tartalék lejátszási útvonal. */

@@ -46,40 +46,29 @@ pprof: no
 playback: no
 
 ###############################################
-# Hitelesítés (a 10. szegmens jogosultsági szintjeinek ingest-fele)
+# Hitelesítés (10. szegmens + 1.0.010)
 #
-# - publish az `onlive` útvonalra: csak a `publisher` felhasználó a
-#   streamkulccsal (az OnLIVE Android app HTTP Basic fejlécet küld).
-# - read: alapértelmezés szerint CSAK localhostról — a böngésző felé a
-#   vezérlő szerver proxyzik (lásd docs/INGEST.md 4. fejezet).
-# - api/metrics: a bind cím miatt eleve csak localhostról érhető el.
+# A MediaMTX NEM tárol jelszót: minden hitelesítési kérdést a vezérlő
+# szerverhez továbbít, az pedig a streamkulcs **scrypt hash-e** ellen
+# ellenőriz. Így ebbe a fájlba nem kerül titok — a kulcs a webes felületen
+# jön létre (/admin → Streamkulcs), és sehol nem tárolódik nyersen.
+#
+# - publish az `onlive` útvonalra: a `publisher` felhasználó a streamkulccsal
+#   (az OnLIVE Android app HTTP Basic fejlécet küld).
+# - read / api / metrics: a vezérlő szerver engedi, mert ezek localhostra
+#   kötött végpontok (a böngésző felé a szerver proxyzik).
+#
+# FONTOS: ha a vezérlő szerver nem fut, a MediaMTX MINDEN kérést elutasít.
+# Ez szándékos — adás nélkül úgysincs mit publikálni —, de a hibakeresésnél
+# érdemes tudni: „401 a WHIP-en" előbb a Node szervert jelenti, nem a kulcsot.
 ###############################################
 
-authMethod: internal
-authInternalUsers:
-  # A telefon. A jelszó = a streamkulcs (.env → ONLIVE_STREAM_KEY).
-  - user: publisher
-    pass: <streamkulcs>
-    ips: []
-    permissions:
-      - action: publish
-        path: onlive
+authMethod: http
+authHTTPAddress: http://127.0.0.1:3000/api/ingest/auth
 
-  # Olvasás a helyi gépről: a vezérlő szerver és az OBS.
-  - user: any
-    pass:
-    ips: [127.0.0.1, ::1]
-    permissions:
-      - action: read
-        path: onlive
-
-  # API és metrikák (localhost bind mellett is kell hozzá jogosultság).
-  - user: any
-    pass:
-    ips: [127.0.0.1, ::1]
-    permissions:
-      - action: api
-      - action: metrics
+# A hitelesítés alól kivett műveletek. Üresen hagyva minden kérdés a
+# szerverhez megy — ez a kívánt működés.
+authHTTPExclude: []
 
 ###############################################
 # WHIP / WebRTC — a bejövő és a kimenő WebRTC is ezen a porton

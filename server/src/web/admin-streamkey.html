@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · Streamkulcs</title>
+<link rel="stylesheet" href="/admin.css">
+<style>
+  main { padding: 1.1rem; display: grid; gap: var(--gap); max-width: 1100px; }
+  .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--gap); align-items: start; }
+
+  /* Követelmény-lista: gépelés közben zöldül. */
+  .rules { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .3rem; }
+  .rules li { display: flex; align-items: center; gap: .5rem; font-size: .84rem; color: var(--muted); }
+  .rules li .mark {
+    width: 18px; height: 18px; border-radius: 50%; flex: none;
+    border: 1px solid var(--border); display: grid; place-items: center;
+    font-size: .7rem; color: var(--faint);
+  }
+  .rules li.ok { color: var(--text); }
+  .rules li.ok .mark { border-color: rgba(16,185,129,.55); color: var(--ok); }
+
+  /* A kulcs egyszeri megmutatása. */
+  .reveal {
+    border: 1px solid rgba(245,158,11,.45); background: rgba(245,158,11,.06);
+    border-radius: var(--r-md); padding: .9rem; margin-top: .9rem;
+  }
+  .reveal .key {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.05rem; word-break: break-all; user-select: all;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); padding: .6rem .7rem; margin: .5rem 0;
+  }
+  .key-input { display: flex; gap: .4rem; align-items: stretch; }
+  .key-input input { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .85rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+  .banner { border-radius: var(--r-md); padding: .7rem .85rem; font-size: .85rem; margin-bottom: .9rem; }
+  .banner.missing { border: 1px solid rgba(225,29,72,.5); background: rgba(225,29,72,.07); }
+  .banner.legacy  { border: 1px solid rgba(245,158,11,.45); background: rgba(245,158,11,.06); }
+  .banner.good    { border: 1px solid rgba(16,185,129,.4);  background: rgba(16,185,129,.06); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1 class="brand"><span>OnLIVE</span> — Streamkulcs</h1>
+  <div class="spacer"></div>
+  <span class="pill" id="statePill">betöltés…</span>
+</header>
+
+<main>
+
+  <div id="banner"></div>
+
+  <div class="split">
+
+    <!-- ================= LÉTREHOZÁS ================= -->
+    <section class="card">
+      <h2>Új kulcs</h2>
+      <p class="hint">
+        A kulcs hitelesíti a telefon kapcsolatát: enélkül bárki publikálhatna a
+        nevedben. A szerver <b>csak a kulcs hash-ét tárolja</b>, ezért az érték
+        egyetlen egyszer, itt látszik — utána már sehonnan nem kérdezhető vissza.
+      </p>
+
+      <div class="row" style="margin-bottom:.9rem">
+        <button class="btn" id="btnGenerate">Kulcs generálása</button>
+        <span class="note">32 karakter, minden követelménynek megfelel</span>
+      </div>
+
+      <div class="field">
+        <label for="manual">…vagy saját kulcs megadása</label>
+        <div class="key-input">
+          <input type="password" id="manual" autocomplete="new-password" spellcheck="false"
+                 placeholder="legalább 16 karakter">
+          <button class="btn ghost" id="btnShow" type="button" title="Megmutat">👁</button>
+        </div>
+      </div>
+
+      <ul class="rules" id="rules"></ul>
+
+      <div class="row" style="margin-top:.9rem">
+        <button class="btn" id="btnSave" disabled>Kulcs mentése</button>
+        <span class="note" id="saveNote"></span>
+      </div>
+
+      <div id="reveal"></div>
+    </section>
+
+    <!-- ================= ÁLLAPOT ================= -->
+    <section class="card">
+      <h2>Jelenlegi kulcs</h2>
+      <p class="hint">
+        Az érték nem jeleníthető meg — csak az, hogy mikor jött létre és mikor
+        használták utoljára. Ha elveszett, generálj újat: a régi azonnal
+        érvénytelenné válik.
+      </p>
+
+      <dl class="kv" id="status"></dl>
+
+      <div class="row" style="margin-top:1rem">
+        <button class="btn ghost" id="btnRevoke">Kulcs visszavonása</button>
+      </div>
+      <p class="note" style="margin-top:.5rem">
+        Visszavonás után a telefon nem tud publikálni, amíg nem állítasz be újat.
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= TELEFON BEÁLLÍTÁS ================= -->
+  <section class="card">
+    <h2>Beállítás a telefonon</h2>
+    <p class="hint">
+      Az OnLIVE appban a jobb felső <b>fogaskerék</b> → <b>Kapcsolat</b>
+      szekcióba kell beírni ugyanezeket. A kulcsot kézzel másold át — sem itt,
+      sem a telefonon nem tárolódik olyan formában, amiből visszaolvasható.
+    </p>
+    <table>
+      <tr><th style="width:34%">Vezérlő szerver</th><td class="mono" id="urlControl">…</td></tr>
+      <tr><th>Ingest (Cloudflare Tunnel)</th><td class="mono" id="urlIngest">…</td></tr>
+      <tr><th>Stream útvonal</th><td class="mono" id="streamPath">…</td></tr>
+      <tr><th>Ingest felhasználó</th><td class="mono" id="ingestUser">…</td></tr>
+      <tr><th>Streamkulcs</th><td>amit ezen az oldalon létrehoztál</td></tr>
+    </table>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/admin-auth.js"></script>
+<script>
+(() => {
+  const { api, requireAuth } = window.OnLiveAdmin;
+
+  const el = (id) => document.getElementById(id);
+  const manual = el('manual');
+  let rules = [];
+  let generatedShown = false;
+
+  const toast = (message, isError = false) => {
+    const box = el('toast');
+    box.textContent = message;
+    box.classList.toggle('err', isError);
+    box.classList.add('show');
+    setTimeout(() => box.classList.remove('show'), 3200);
+  };
+
+  // -------------------------------------------------------------------------
+  //  Követelmények — ugyanaz a lista, mint a szerveren (onnan is jön)
+  // -------------------------------------------------------------------------
+
+  /*
+    A szabályok kiértékelése itt CSAK visszajelzés. A mentést a szerver is
+    ellenőrzi (security/stream-key.js), tehát a felület megkerülése nem enged
+    át gyenge kulcsot.
+  */
+  const TESTS = {
+    hossz: (value) => value.length >= 16,
+    kisbetu: (value) => /[a-z]/.test(value),
+    nagybetu: (value) => /[A-Z]/.test(value),
+    szam: (value) => /[0-9]/.test(value),
+    specialis: (value) => /[!@#$%^&*()\-_=+\[\]{}:;,.?/~]/.test(value),
+  };
+
+  function renderRules(value) {
+    const list = el('rules');
+    list.textContent = '';
+
+    let allOk = value.length > 0;
+    for (const rule of rules) {
+      const ok = TESTS[rule.id] ? TESTS[rule.id](value) : false;
+      if (!ok) allOk = false;
+
+      const item = document.createElement('li');
+      item.className = ok ? 'ok' : '';
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.textContent = ok ? '✓' : '';
+      const label = document.createElement('span');
+      label.textContent = rule.label;
+      item.append(mark, label);
+      list.appendChild(item);
+    }
+
+    const hasSpace = /\s/.test(value);
+    el('btnSave').disabled = !allOk || hasSpace;
+    el('saveNote').textContent = hasSpace ? 'A kulcs nem tartalmazhat szóközt.' : '';
+  }
+
+  manual.addEventListener('input', () => renderRules(manual.value));
+
+  el('btnShow').addEventListener('click', () => {
+    manual.type = manual.type === 'password' ? 'text' : 'password';
+    manual.focus();
+  });
+
+  // -------------------------------------------------------------------------
+  //  Állapot
+  // -------------------------------------------------------------------------
+
+  const formatDate = (iso) => {
+    if (!iso) return '–';
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? '–' : date.toLocaleString('hu-HU');
+  };
+
+  function renderStatus(status) {
+    rules = status.policy?.rules ?? rules;
+    renderRules(manual.value);
+
+    const pill = el('statePill');
+    pill.textContent = status.configured ? 'kulcs beállítva' : 'nincs kulcs';
+    pill.className = 'pill ' + (status.configured && !status.legacy ? 'on' : 'off');
+
+    const banner = el('banner');
+    banner.textContent = '';
+    banner.className = 'banner ' + (!status.configured ? 'missing' : status.legacy ? 'legacy' : 'good');
+    banner.textContent = !status.configured
+      ? 'Nincs streamkulcs. Amíg nem hozol létre egyet, a WHIP ingest védtelen — bárki publikálhat a nevedben.'
+      : status.legacy
+        ? 'A kulcs még a .env fájlból származik, nyers szövegként. Hozz létre újat: onnantól hash-elve tárolódik, és a .env-ből törölhető.'
+        : 'A kulcs hash-elve (scrypt) van tárolva. A nyers érték sehol nem szerepel — sem a szerveren, sem a MediaMTX konfigurációjában.';
+
+    const rows = [
+      ['Állapot', status.configured ? 'beállítva' : 'nincs beállítva'],
+      ['Forrás', { felulet: 'webes felület', env: '.env fájl (elavult)', nincs: '–' }[status.source]],
+      ['Létrehozva', formatDate(status.createdAt)],
+      ['Létrehozta', status.createdBy ?? '–'],
+      ['Módja', { generalt: 'generált', kezi: 'kézzel megadott' }[status.origin] ?? '–'],
+      ['Utoljára használva', formatDate(status.lastUsedAt)],
+      ['Cserék száma', String(status.rotations ?? 0)],
+    ];
+
+    const list = el('status');
+    list.textContent = '';
+    for (const [key, value] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = key;
+      const dd = document.createElement('dd');
+      dd.textContent = value ?? '–';
+      list.append(dt, dd);
+    }
+
+    el('btnRevoke').disabled = !status.configured || status.source === 'env';
+  }
+
+  async function load() {
+    const response = await api('/api/admin/stream-key', {});
+    if (!response.ok) return;
+    renderStatus(await response.json());
+  }
+
+  // -------------------------------------------------------------------------
+  //  A kulcs egyszeri megmutatása
+  // -------------------------------------------------------------------------
+
+  function showKey(key) {
+    generatedShown = true;
+    const box = el('reveal');
+    box.textContent = '';
+    box.className = 'reveal';
+
+    const title = document.createElement('b');
+    title.textContent = 'Az új kulcs — most másold ki:';
+
+    const value = document.createElement('div');
+    value.className = 'key';
+    value.textContent = key;              // textContent: a kulcs sosem HTML
+
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const copy = document.createElement('button');
+    copy.className = 'btn';
+    copy.textContent = 'Másolás';
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(key);
+        copy.textContent = 'Kimásolva';
+      } catch {
+        copy.textContent = 'Jelöld ki és másold';
+      }
+      setTimeout(() => { copy.textContent = 'Másolás'; }, 2000);
+    });
+
+    const hide = document.createElement('button');
+    hide.className = 'btn ghost';
+    hide.textContent = 'Elrejtés';
+    hide.addEventListener('click', () => { box.textContent = ''; box.className = ''; });
+
+    const note = document.createElement('p');
+    note.className = 'note';
+    note.style.margin = '.5rem 0 0';
+    note.textContent = 'Ez az egyetlen alkalom, amikor a kulcs látható. '
+      + 'Ha bezárod az oldalt anélkül, hogy beírnád a telefonba, generálj újat.';
+
+    row.append(copy, hide);
+    box.append(title, value, row, note);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Műveletek
+  // -------------------------------------------------------------------------
+
+  el('btnGenerate').addEventListener('click', async () => {
+    if (!confirm('Új kulcs generálása? A jelenlegi azonnal érvénytelen lesz, és a telefonba is be kell írni az újat.')) return;
+
+    const response = await api('/api/admin/stream-key/generate', {
+      method: 'POST',
+      body: JSON.stringify({ length: 32 }),
+    });
+    const body = await response.json();
+    if (!response.ok) return toast(body.error ?? 'A generálás nem sikerült.', true);
+
+    showKey(body.key);
+    renderStatus(body.status);
+    toast('Új kulcs létrehozva.');
+  });
+
+  el('btnSave').addEventListener('click', async () => {
+    const key = manual.value;
+    if (!confirm('Beállítod ezt a kulcsot? A jelenlegi azonnal érvénytelen lesz.')) return;
+
+    const response = await api('/api/admin/stream-key', {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    });
+    const body = await response.json();
+    if (!response.ok) return toast(body.error ?? 'A mentés nem sikerült.', true);
+
+    manual.value = '';
+    manual.type = 'password';
+    renderStatus(body.status);
+    renderRules('');
+    toast('A kulcs beállítva. Írd be a telefonba is.');
+  });
+
+  el('btnRevoke').addEventListener('click', async () => {
+    if (!confirm('Visszavonod a kulcsot? A telefon ezután nem tud publikálni.')) return;
+
+    const response = await api('/api/admin/stream-key', { method: 'DELETE' });
+    const body = await response.json();
+    if (!response.ok) return toast(body.error ?? 'A visszavonás nem sikerült.', true);
+
+    renderStatus(body.status);
+    toast('A kulcs visszavonva.');
+  });
+
+  // Figyelmeztetés, ha a frissen mutatott kulcs kimásolása nélkül lépnél tovább.
+  window.addEventListener('beforeunload', (event) => {
+    if (!generatedShown || !document.getElementById('reveal').textContent) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  // -------------------------------------------------------------------------
+  //  Indulás
+  // -------------------------------------------------------------------------
+
+  (async () => {
+    await requireAuth();
+    await load();
+
+    const info = await api('/api/admin/endpoints', {});
+    if (info.ok) {
+      const urls = await info.json();
+      el('urlControl').textContent = urls.admin ?? '–';
+      el('urlIngest').textContent = urls.ingest ?? '–';
+      el('streamPath').textContent = urls.streamPath ?? 'onlive';
+      el('ingestUser').textContent = urls.ingestUser ?? 'publisher';
+    }
+  })();
+})();
+</script>
+</body>
+</html>

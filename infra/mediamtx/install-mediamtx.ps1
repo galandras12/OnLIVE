@@ -6,7 +6,12 @@
     1. Letölti a legfrissebb MediaMTX Windows kiadást a GitHub-ról.
     2. Kicsomagolja a célmappába.
     3. Ha még nincs `mediamtx.yml`, létrehozza a repóban lévő sablonból, és
-       beleírja a megadott streamkulcsot.
+       beleírja a vezérlő szerver címét (a hitelesítés oda mutat).
+
+       A streamkulcsot 1.0.010 óta NEM ide kell beírni: a MediaMTX minden
+       hitelesítési kérdést a vezérlő szerverhez továbbít, ami a kulcs
+       hash-e ellen ellenőriz. A kulcs a webes felületen jön létre
+       (/admin -> Streamkulcs), és sehol nem tárolódik nyersen.
     4. Regisztrál egy ütemezett feladatot, ami rendszerindításkor elindítja.
 
     Miért ütemezett feladat, és nem Windows service: a MediaMTX-nek nincs
@@ -15,7 +20,7 @@
     háttérfolyamat. Ha `nssm` elérhető, azzal igazi service is csinálható.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "titkos-kulcs"
+    powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 
 .PARAMETER Uninstall
     Az ütemezett feladat eltávolítása (a fájlokat nem törli).
@@ -24,6 +29,8 @@
 [CmdletBinding()]
 param(
     [string] $InstallDir = 'C:\OnLIVE\mediamtx',
+    [string] $ControlUrl = 'http://127.0.0.1:3000',
+    # Elavult: a streamkulcs a webes felületen jön létre. Csak figyelmeztetünk rá.
     [string] $StreamKey,
     [string] $TaskName = 'OnLIVE MediaMTX',
     [switch] $Uninstall
@@ -94,10 +101,12 @@ if (-not (Test-Path $existingConfig)) {
     if (-not (Test-Path $template)) { throw "Nem található a sablon: $template" }
 
     $content = Get-Content $template -Raw
+    $content = $content.Replace('http://127.0.0.1:3000/api/ingest/auth', "$($ControlUrl.TrimEnd('/'))/api/ingest/auth")
+
     if ($StreamKey) {
-        $content = $content.Replace('<streamkulcs>', $StreamKey)
-    } else {
-        Write-Host 'FIGYELEM: nem adtál meg -StreamKey értéket, a <streamkulcs> helyőrző benne maradt!' -ForegroundColor Yellow
+        Write-Host 'MEGJEGYZES: a -StreamKey mar nem kell ide.' -ForegroundColor Yellow
+        Write-Host '  A kulcsot a webes feluleten hozd letre: /admin -> Streamkulcs.' -ForegroundColor Yellow
+        Write-Host '  A MediaMTX a vezerlo szervertol kerdezi meg, hash ellen ellenorizve.' -ForegroundColor Yellow
     }
     Set-Content -Path $existingConfig -Value $content -Encoding UTF8
     Write-Host "Konfiguráció létrehozva: $existingConfig" -ForegroundColor Green

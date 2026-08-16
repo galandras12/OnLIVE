@@ -201,7 +201,41 @@ SDP és a WHIP session érintetlen — a szerver oldalon nincs szakadás.
 
 ---
 
-## 4. Minőségi beállítások és visszajelentés a szervernek
+## 4. Beállítás-képernyő (fogaskerék)
+
+A jobb felső **fogaskerék** teljes képernyős beállításokra visz (1.0.010) —
+korábban egy szűk párbeszédablak volt, amiben csak a minőség fért el. Három
+szekció:
+
+**Kapcsolat.** A streamkulcs és a Cloudflare Tunnel címei:
+
+| Mező | Mi ez |
+|---|---|
+| Streamkulcs | a **webes felületen** létrehozott kulcs (Admin → Streamkulcs). Rejtett mező, szem ikonnal megmutatható |
+| Vezérlő szerver | ide mennek a gombnyomások (`admin.galandras.com`) |
+| Ingest (WHIP) | ide megy a kép (`ingest.galandras.com`) |
+| Stream útvonal / Ingest felhasználó | a publish cím és a Basic név |
+
+A **Kapcsolat tesztelése** gomb `GET /api/session/ping` hívást küld a mentett
+adatokkal, és megmondja, jó-e a cím és a kulcs — nem kell adást indítani
+ahhoz, hogy kiderüljön egy elgépelés. A hibaüzenet konkrét: rossz kulcsnál a
+felületre irányít, 404-nél azt írja, hogy nem OnLIVE szerver válaszol.
+
+> A kulcsot azért kell kézzel átmásolni, mert a szerver **csak a hash-ét
+> tárolja** ([`SECURITY.md`](SECURITY.md) 3.): visszaolvasni sehonnan nem
+> lehet. Ha elveszett, a felületen kell újat generálni.
+
+**TURN relay.** A WHIP jelzés átmegy a Tunnelen, a média nem — mobilhálózatról
+ehhez TURN kell ([`NETWORKING.md`](NETWORKING.md) 3.).
+
+**Minőség.** Felbontás, képfrissítés, bitráta, hang — lásd alább.
+
+A rendszer vissza-gombja a beállításokat zárja, nem az appot: adás közben egy
+véletlen kilépés a közvetítést szakítaná meg.
+
+---
+
+## 4.1 Minőségi beállítások és visszajelentés a szervernek
 
 | Beállítás | Hatás | Újratárgyalás? |
 |---|---|---|
@@ -351,9 +385,12 @@ android/app/src/main/java/com/galandras/onlive/
 │   ├── RtcEngine.kt             # PeerConnection, tracks, stats
 │   ├── WhipClient.kt            # WHIP POST/DELETE
 │   └── SdpUtils.kt              # Opus bitráta, H.264 preferálás
-├── net/ControlApi.kt            # /api/session/start|pause|resume|end|config|stats
+├── net/ControlApi.kt            # /api/session/start|pause|resume|end|config|stats|ping
 ├── settings/                    # DataStore + minőségi enumok
-├── ui/OnLiveScreen.kt           # Compose felület
+├── ui/
+│   ├── OnLiveScreen.kt          # Compose felület (kamera, vezérlők)
+│   ├── SettingsScreen.kt        # ★ fogaskerék: kapcsolat, TURN, minőség
+│   └── Colors.kt                # közös jelentés-színek
 └── util/                        # Notifications, BackgroundPermissions, Torch
 ```
 

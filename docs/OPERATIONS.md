@@ -60,7 +60,8 @@ copy .env.example .env
 
 cd server
 npm install
-npm run keygen                              # streamkulcs, live token, hook titok
+npm run keygen                              # live token, hook titok
+#   (a streamkulcs 1.0.010 óta a webes felületen jön létre — lásd 2.6)
 npm run hash-password -- "hosszú jelszó"    # az admin jelszó scrypt hash-e
 ```
 
@@ -87,7 +88,7 @@ Részletek és a `config.yml` sablon: [`docs/NETWORKING.md`](NETWORKING.md) 4. f
 
 ```powershell
 cd C:\OnLIVE\infra\mediamtx
-powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 ```
 
 **Ellenőrzés:** `curl http://127.0.0.1:9997/v3/paths/list` → JSON válasz.
@@ -102,10 +103,25 @@ powershell -ExecutionPolicy Bypass -File .\install-tunnel-watchdog.ps1
 Az alagút kiesését figyeli és újraindítja a service-t
 ([`docs/NETWORKING.md`](NETWORKING.md) 6. fejezet).
 
-### 2.6 Az Android app
+### 2.6 Streamkulcs a webes felületen
 
-`android/` — Android Studióból telepítve. A beállításokban a szerver URL-je és
-a streamkulcs kell ([`docs/ANDROID.md`](ANDROID.md)). Ne felejtsd el az
+Ez az első dolog, amit a szerver elindítása után csinálj — enélkül a telefon
+nem tud publikálni:
+
+1. `https://admin.galandras.com/admin` → **Streamkulcs** fül,
+2. **Kulcs generálása** (vagy saját megadása: legalább 16 karakter, kis- és
+   nagybetűvel, számmal, speciális karakterrel),
+3. a megjelenő kulcsot **azonnal másold ki** — csak egyszer látszik, mert a
+   szerver kizárólag a hash-ét tárolja.
+
+**Ellenőrzés:** a fül állapot-táblájában „Forrás: webes felület" áll.
+
+### 2.7 Az Android app
+
+`android/` — Android Studióból telepítve. A **fogaskerék → Kapcsolat**
+szekcióba írd be az előző pontban létrehozott streamkulcsot és a Tunnel címeit,
+majd nyomj **Kapcsolat tesztelése** gombot: ha zöld, a cím és a kulcs is jó
+([`docs/ANDROID.md`](ANDROID.md)). Ne felejtsd el az
 akkumulátor-optimalizálás alóli felmentést és Samsungon a „Sosem alszik"
 beállítást, különben a rendszer háttérben megöli a capture-t.
 
@@ -357,6 +373,7 @@ ujjlenyomatával, majd `outro → ended (outro/done)` `source: időzítő`.
 |---|---|---|
 | `admin.galandras.com` nem jön be | a tunnel nem fut | `sc query cloudflared`, `net start cloudflared`; napló: `logs/startup.log` |
 | A tunnel fut, de „502 Bad Gateway" | a Node szerver nem fut vagy más porton van | `npm start`, ellenőrizd az `ONLIVE_SERVER_PORT`-ot és a `config.yml`-t |
+| A telefon 401-et kap a WHIP-en | nincs streamkulcs, elgépelt kulcs — vagy a vezérlő szerver áll | a MediaMTX a Node szervertől kérdez: előbb `curl http://127.0.0.1:3000/healthz`, utána a kulcs |
 | A telefon „csatlakozva", de nincs kép | a WHIP jelzés átment, a **média nem** — a Cloudflare Tunnel nem visz WebRTC médiát | TURN szerver kell, vagy Tailscale ([`docs/NETWORKING.md`](NETWORKING.md) 3. fejezet) |
 | A szerver `intro`-ban ragad, pedig megy a stream | a MediaMTX API nem elérhető | `curl http://127.0.0.1:9997/v3/paths/list`; a napló `A MediaMTX API nem elérhető` sorai |
 | Villog a „Megszakadt" képernyő | ingadozó mobilnet, túl rövid debounce | `ONLIVE_INGEST_INTERRUPT_AFTER_MS` növelése (alap 3000) |
@@ -389,5 +406,7 @@ felületről, mi változott a beállításokon és mikor szakadt meg a stream.
 | `ONLIVE_TUNNEL_SERVICE` | `cloudflared` | a tunnel Windows service neve |
 | `ONLIVE_OUTRO_DURATION_MS` | `15000` | az outro **kezdő** hossza; utána az admin felületen állítható |
 | `ONLIVE_SHUTDOWN_ON_ENDED` | `false` | `ended` állapotban a folyamat is álljon-e le |
+| `ONLIVE_STREAM_KEY` | – | **elavult**: csak tartalék a régi telepítéseknek. A kulcs a webes felületen jön létre, hash-elve tárolva |
+| `ONLIVE_INGEST_USER` | `publisher` | a WHIP publish felhasználóneve (a MediaMTX ezt ellenőrzi a kulccsal együtt) |
 
 A teljes lista: [`.env.example`](../.env.example).

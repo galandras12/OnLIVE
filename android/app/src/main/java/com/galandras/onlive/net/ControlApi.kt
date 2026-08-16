@@ -129,6 +129,49 @@ class ControlApi(
         }
     }
 
+    /**
+     * Kapcsolat-teszt a beállítás-képernyőről (1.0.010).
+     *
+     * Ez az egyetlen hívás, aminek a hibáját MEG KELL mutatni a felhasználónak:
+     * a többi (session, stats) csendben újrapróbálkozik, mert adás közben nem
+     * szabad felugró üzenetekkel zavarni. Itt viszont épp azt teszteljük, hogy
+     * jó-e a cím és a kulcs.
+     */
+    suspend fun ping(settings: Settings): Result<PingResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val base = settings.controlBaseUrl.trim().trimEnd('/')
+            require(base.isNotBlank()) { "Nincs megadva a vezérlő szerver címe." }
+
+            val request = Request.Builder()
+                .url("$base/api/session/ping")
+                .get()
+                .apply {
+                    if (settings.streamKey.isNotBlank()) {
+                        header("Authorization", "Bearer ${settings.streamKey}")
+                    }
+                }
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                when (response.code) {
+                    200 -> {
+                        val json = JSONObject(body)
+                        PingResult(
+                            state = json.optString("state", "ismeretlen"),
+                            whipUrl = json.optString("whipUrl", settings.whipUrl),
+                            streamPath = json.optString("streamPath", settings.streamPath),
+                        )
+                    }
+                    401 -> error("A streamkulcs nem jó. A webes felületen (Streamkulcs fül) hozz létre újat.")
+                    429 -> error("Túl sok sikertelen próbálkozás — várj egy kicsit.")
+                    404 -> error("A cím elérhető, de nem OnLIVE szerver válaszol (HTTP 404).")
+                    else -> error("A szerver HTTP ${response.code} választ adott.")
+                }
+            }
+        }.onFailure { Log.w(TAG, "ping sikertelen: ${it.message}") }
+    }
+
     private fun parseCommands(payload: String?): List<RemoteCommand> {
         if (payload.isNullOrBlank()) return emptyList()
         return runCatching {
@@ -176,6 +219,13 @@ class ControlApi(
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
+
+/** A kapcsolat-teszt eredménye — ezt mutatja a beállítás-képernyő. */
+data class PingResult(
+    val state: String,
+    val whipUrl: String,
+    val streamPath: String,
+)
 
 /**
  * A vezérlő szervertől érkező parancs (8. szegmens).

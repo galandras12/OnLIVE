@@ -106,23 +106,86 @@ IP-t hazudhatna, és a zárlat sosem lépne életbe.
 **Ez az egyetlen védelme az ingestnek**: aki kitalálja, idegen streamet
 publikálhat a nevedben, és a te OBS-edben az fog megjelenni.
 
-```powershell
-npm run keygen
-# → ONLIVE_STREAM_KEY=... (192 bit véletlen, base64url)
+### Létrehozás a webes felületen (1.0.010)
+
+A kulcs az admin felület **Streamkulcs** fülén jön létre — nem fájlban, nem
+parancssorban:
+
+- **Generálás:** 32 karakter, kriptográfiai véletlenből, garantáltan minden
+  követelménnyel.
+- **Saját kulcs:** kézzel is megadható, ha a szabályok teljesülnek.
+
+| Követelmény | Miért |
+|---|---|
+| legalább **16 karakter** | ennél rövidebbet érdemes végigpróbálni |
+| **kisbetű** | … |
+| **nagybetű** | … a négy karakterosztály együtt adja a keresési teret |
+| **számjegy** | … |
+| **speciális karakter** | … |
+| nincs szóköz | a kulcs HTTP fejlécben utazik |
+
+A felület gépelés közben jelzi, melyik feltétel teljesül, de a mentést a
+szerver is ellenőrzi (`security/stream-key.js`) — a felület megkerülése nem
+enged át gyenge kulcsot.
+
+### Tárolás: csak a hash
+
+A szerver a kulcsot **scrypt hash-ként** tárolja (`data/stream-key.json`),
+ugyanúgy, ahogy az admin jelszót. A nyers érték **egyetlen egyszer** hagyja el
+a szervert: a létrehozás válaszában, amit a felület egyszer megmutat. Utána
+sehonnan nem kérdezhető vissza — sem API-n, sem fájlból.
+
+Amit szándékosan **nem** tárolunk: ujjlenyomatot vagy „emlékeztetőt" a
+kulcsból. Egy gyors hash (sha256) a fájl mellett kioltaná a scrypt lassúságát,
+vagyis épp azt a védelmet, amiért a scryptet választottuk.
+
+### Hogyan hitelesít ezek után a MediaMTX
+
+Korábban ugyanaz a nyers kulcs szerepelt a `mediamtx.yml`-ben is. Ez most
+megszűnt: a MediaMTX **nem tárol jelszót**, hanem minden hitelesítési kérdést
+a vezérlő szerverhez továbbít, az pedig a hash ellen ellenőriz.
+
+```yaml
+authMethod: http
+authHTTPAddress: http://127.0.0.1:3000/api/ingest/auth
 ```
 
-A kulcsot két helyre kell beírni:
+```
+telefon ──WHIP publish──> MediaMTX ──POST /api/ingest/auth──> vezérlő szerver
+                                                                    │
+                                              scrypt hash ellenőrzés ┘
+                             200 = mehet · 401 = tilos
+```
 
-1. `.env` → `ONLIVE_STREAM_KEY` (a vezérlő szerver ezzel ellenőrzi a telefont),
-2. `infra/mediamtx/mediamtx.yml` → `authInternalUsers` → `publisher` jelszava
-   (a MediaMTX ezzel ellenőrzi a WHIP publish-t).
+A végpont **csak localhostról** hívható (a MediaMTX ugyanazon a gépen fut), és
+a sikertelen publish-kísérleteket IP-nként számolja: a szótáras próbálkozás
+ugyanabba a zárlatba fut, mint a bejelentkezés.
 
-A telefon HTTP Basic fejléccel küldi (`publisher` + kulcs) — a MediaMTX belső
-auth módja ezt fogadja el ([`INGEST.md`](INGEST.md) 2.).
+> **Üzemeltetési következmény:** ha a vezérlő szerver nem fut, a MediaMTX minden
+> publish-t elutasít. Ez szándékos — adás nélkül úgysincs mit vezérelni —, de
+> hibakeresésnél érdemes tudni: a „401 a WHIP-en" előbb jelent álló Node
+> szervert, mint rossz kulcsot.
 
-A szerver **induláskor kiértékeli** a titkokat, és szól, ha rövid,
-alapértelmezett („valtoztasd-meg") vagy egyveretű értéket talál. Ne akkor
-derüljön ki, amikor már baj van.
+### A telefon oldala
+
+Az appban a **fogaskerék → Kapcsolat** szekcióba kell beírni ugyanezt a kulcsot
+és a Tunnel címeit. A **Kapcsolat tesztelése** gomb `GET /api/session/ping`
+hívással azonnal megmondja, jó-e a cím és a kulcs — nem kell adást indítani
+hozzá.
+
+A telefon HTTP Basic fejléccel publikál (`publisher` + kulcs), a vezérlő
+szerver felé pedig `Authorization: Bearer <kulcs>` fejléccel jelez.
+
+### Csere és visszavonás
+
+Új kulcs létrehozása a régit **azonnal** érvényteleníti (a memóriabeli
+gyorsítótár is ürül). A visszavonás után a telefon nem tud publikálni, amíg
+nincs új kulcs. A `.env`-ben maradt `ONLIVE_STREAM_KEY` csak tartalék a régi
+telepítésekhez: amint a felületen létrejön egy kulcs, az élvez elsőbbséget, és
+a `.env`-sor törölhető.
+
+A szerver **induláskor kiértékeli** a titkokat, és szól, ha a streamkulcs
+hiányzik vagy még a `.env`-ből jön. Ne akkor derüljön ki, amikor már baj van.
 
 ## 4. `/live` — opcionális, korlátozott jogú token
 

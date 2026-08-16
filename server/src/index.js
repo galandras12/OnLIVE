@@ -28,9 +28,11 @@ import { createOverlayRoutes } from './api/overlay.js';
 import { createStreamProxyRoutes } from './api/stream-proxy.js';
 import { createDeviceRoutes } from './api/device.js';
 import { createMonitorRoutes } from './api/monitor.js';
+import { createStreamKeyRoutes } from './api/stream-key.js';
 import { adminAuth, liveAuth as liveAuthFactory } from './api/auth.js';
 import { createAuthRoutes } from './api/auth-routes.js';
 import { SessionStore } from './security/sessions.js';
+import { StreamKeyStore } from './security/stream-key.js';
 import { RateLimiter } from './security/rate-limit.js';
 import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
@@ -54,6 +56,15 @@ const links = new LinkStore({ dataDir: config.dataDir, logger });
 
 /** Admin munkamenetek és a bejelentkezés sebességkorlátozása (10. szegmens). */
 const sessions = new SessionStore({ ttlMs: config.sessionTtlMs });
+/**
+ * A streamkulcs hash-elt tára (1.0.010). A `.env`-ben megadott érték már csak
+ * tartalék: ha a felületen létrehoznak egy kulcsot, az élvez elsőbbséget.
+ */
+const streamKeys = new StreamKeyStore({
+  dataDir: config.dataDir,
+  logger,
+  fallbackKey: config.streamKey,
+});
 const loginLimiter = new RateLimiter();
 setInterval(() => loginLimiter.prune(), 60_000).unref?.();
 const monitor = new IngestMonitor({ config, logger });
@@ -138,10 +149,11 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(createAuthRoutes({ config, sessions, limiter: loginLimiter, adminGuard, logger }));
-app.use(createRoutes({ config, controller, monitor, store, commands, limiter: loginLimiter, adminGuard, logger, startedAt }));
+app.use(createAuthRoutes({ config, sessions, limiter: loginLimiter, streamKeys, adminGuard, logger }));
+app.use(createRoutes({ config, controller, monitor, store, commands, limiter: loginLimiter, streamKeys, adminGuard, logger, startedAt }));
 app.use(createDeviceRoutes({ config, controller, commands, adminGuard, logger }));
 app.use(createMonitorRoutes({ config, store, metrics, links, adminGuard, logger }));
+app.use(createStreamKeyRoutes({ streamKeys, adminGuard, logger }));
 app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth, adminGuard }));
 app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth, adminGuard }));
 app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
@@ -189,6 +201,7 @@ app.get('/admin/login', (req, res) => res.type('html').send(page('login.html')))
 app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.html')));
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
 app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
+app.get('/admin/stream-key', (req, res) => res.type('html').send(page('admin-streamkey.html')));
 app.get('/admin/monitor', (req, res) => res.type('html').send(
   page('admin-monitor.html').replace(
     '<script src="/socket.io/socket.io.js"></script>',
@@ -221,7 +234,10 @@ app.get('/', (req, res) => {
 const httpServer = createServer(app);
 attachSocket(httpServer, { controller, mediaStore, overlayStore, config, sessions, logger });
 
-httpServer.listen(config.port, () => {
+httpServer.listen(config.port, async () => {
+  // A streamkulcs betöltése aszinkron: megvárjuk, különben a biztonsági
+  // helyzetkép azt hinné, nincs is kulcs.
+  await streamKeys.ready;
   banner();
   monitor.start();
 });
@@ -259,11 +275,23 @@ function banner() {
  * kiírjuk — ne akkor derüljön ki, amikor már baj van.
  */
 function securityReport() {
+  // A streamkulcs 1.0.010 óta hash-elve, a felületen jön létre; a `.env`
+  // értéke már csak tartalék, ezért azt külön minősítjük.
+  const keyStatus = streamKeys.status();
+  const streamKeyCheck = keyStatus.source === 'felulet'
+    ? { level: 'strong', message: 'Streamkulcs: a felületen létrehozva, hash-elve tárolva.' }
+    : keyStatus.source === 'env'
+      ? {
+        level: 'fair',
+        message: 'Streamkulcs: még a .env-ből jön. Hozz létre újat: /admin → Streamkulcs.',
+      }
+      : { level: 'missing', message: 'Nincs streamkulcs — bárki publikálhat! (/admin → Streamkulcs)' };
+
   const checks = [
     ['Admin jelszó', config.adminPasswordHash
       ? { level: 'strong', message: 'Admin jelszó: hash-elve tárolva.' }
       : assessSecret(config.adminPassword, { name: 'Admin jelszó', minLength: 12 })],
-    ['Streamkulcs', assessSecret(config.streamKey, { name: 'Streamkulcs', minLength: 20 })],
+    ['Streamkulcs', streamKeyCheck],
     ['Hook titok', assessSecret(config.hookSecret, { name: 'Hook titok', minLength: 16 })],
   ];
 

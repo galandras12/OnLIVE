@@ -12,6 +12,74 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.010 — Streamkulcs a webes felületen, kapcsolat-beállítás a telefonon
+
+*2026-08-16*
+
+Eddig a streamkulcs a `.env`-ben állt nyers szövegként, és ugyanazt az értéket
+kézzel kellett a MediaMTX konfigurációjába is bemásolni. Ettől a verziótól a
+webes felületen jön létre, és **kizárólag a hash-e tárolódik**.
+
+### Streamkulcs-kezelés (webes felület)
+
+- Új **Streamkulcs** fül az admin felületen: generálható kulcs (32 karakter,
+  kriptográfiai véletlenből), vagy megadható saját.
+- Követelmények, mindkét oldalon kikényszerítve: **legalább 16 karakter**,
+  kisbetűvel, nagybetűvel, számmal és speciális karakterrel. Az űrlap gépelés
+  közben jelzi, melyik feltétel teljesül; mentéskor a szerver újra ellenőriz,
+  tehát a felület megkerülése nem enged át gyenge kulcsot.
+- A nyers kulcs **pontosan egyszer** hagyja el a szervert: a létrehozás
+  válaszában, amit az oldal egyszer megmutat, másolás gombbal. Utána sehonnan
+  nem olvasható vissza.
+- A tárolás **scrypt hash** (`data/stream-key.json`), ugyanaz az eljárás, mint
+  az admin jelszónál. Ujjlenyomatot vagy „emlékeztetőt" sem tárolunk a
+  kulcsból: egy gyors hash a fájl mellett kioltaná a scrypt lassúságát, vagyis
+  épp azt a védelmet, amiért választottuk.
+- Új kulcs létrehozása a régit azonnal érvényteleníti. Az állapot-panel mutatja,
+  mikor jött létre és mikor használták utoljára — az értékét soha.
+
+### A MediaMTX már nem tárol jelszót
+
+Ettől igaz a „csak hash-elve" végponttól végpontig: a MediaMTX minden
+hitelesítési kérdést a vezérlő szerverhez továbbít (`authMethod: http` →
+`POST /api/ingest/auth`), az pedig a hash ellen ellenőriz. A `mediamtx.yml`-be
+így semmilyen titok nem kerül.
+
+A végpont csak localhostról hívható, a sikertelen publish-kísérletek pedig
+ugyanabba az IP-nkénti zárlatba futnak, mint a bejelentkezés. Egy üzemeltetési
+következmény, dokumentálva: ha a vezérlő szerver áll, a MediaMTX minden
+publikálást elutasít — a „401 a WHIP-en" tehát előbb jelent álló Node szervert,
+mint rossz kulcsot.
+
+### Android: a fogaskerék mögött végre valódi beállítások
+
+- A fogaskerék teljes képernyős beállítás-oldalra visz a korábbi szűk minőség-
+  párbeszéd helyett.
+- **Kapcsolat** szekció: streamkulcs (rejtve, szem ikonnal megmutatható) és a
+  Cloudflare Tunnel címei — vezérlő szerver, ingest, stream útvonal, ingest
+  felhasználó.
+- **Kapcsolat tesztelése** gomb: egyetlen `GET /api/session/ping` megmondja,
+  jó-e a cím és a kulcs, anélkül hogy adást kellene indítani. A hibaüzenetek
+  konkrétak — rossz kulcsnál a webes felületre irányít.
+- Mellette **TURN** és **Minőség** szekció; a rendszer vissza-gombja a
+  beállításokat zárja, nem az appot.
+
+### Javítva
+
+- **Az admin oldal teljes JavaScriptje halott volt a böngészőben.** Még a 10.
+  szegmensben egy sortörés csúszott egy aposztrófos szöveg közepébe az
+  `admin.html`-ben (`join('` … `')`), amitől az egész beágyazott szkript
+  értelmezhetetlenné vált: a fülek, a Kezdés/Befejezés gombok, az élő állapot és
+  a védelem-jelző sem csinált semmit. Ennek a kiadásnak a tesztelése közben
+  derült ki, valódi fejetlen böngészővel.
+- Új tesztfájl (`test/web-pages.test.js`) minden kiszolgált oldal minden
+  beágyazott szkriptjét elemzi, így szintaktikai hiba többé nem juthat át
+  észrevétlenül. A régi, hibás fájlon ellenőrizve: ott bukik.
+
+**146 teszt, mind zöld.**
+
+---
+
 ## 1.0.000 — Az alap szakasz lezárása
 
 *2026-08-16*

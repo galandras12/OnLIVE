@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.010** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -12,10 +12,14 @@ control logic lives on the server and in the web UI.
 
 ## Version 1.0
 
-Version 1.0 closes the base phase of the project: the eleven planned segments
+Version 1.0 closed the base phase of the project: the eleven planned segments
 (`0.1` – `0.11`) are complete, so the system is usable end to end — from pressing
 "Start" on the phone to the composited picture appearing in OBS, with logging,
 authentication and a documented test plan.
+
+**1.0.010** adds stream key management to the web UI (created there, stored as a
+scrypt hash only) and a real settings screen behind the gear icon in the Android
+app, where the key and the tunnel addresses are entered.
 
 The per-segment history is in [`CHANGELOG.md`](CHANGELOG.md); the machine-readable
 version number is in [`versions.onlive`](versions.onlive).
@@ -58,11 +62,15 @@ powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<str
 # 3) control server
 cd ..\..\server
 npm install
-npm run keygen                              # stream key, live token, hook secret
+npm run keygen                              # live token, hook secret
 npm run hash-password -- "long password"    # admin password hash
 npm test
 npm start
 ```
+
+Then create the stream key on the web UI — **Admin → Stream key** — and enter it
+on the phone under the gear icon (**Connection** section). The server only ever
+stores its hash, so copy it while it is shown.
 
 After that the daily start is a single action: **`start.bat`** in the project
 root (tunnel check → MediaMTX → control server, in a console window that stays
@@ -106,3 +114,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`0.10`](CHANGELOG.md#010--security-and-authentication) | 10 | Security and authentication |
 | [`0.11`](CHANGELOG.md#011--deployment-operations-test-plan) | 11 | Deployment, operations, test plan |
 | [`1.0.000`](CHANGELOG.md#10000--base-phase-closed) | — | **Base phase closed** |
+| [`1.0.010`](CHANGELOG.md#10010--stream-key-on-the-web-connection-settings-on-the-phone) | — | Stream key on the web, connection settings on the phone |

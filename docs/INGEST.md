@@ -70,6 +70,7 @@ Jogosultságok (`authInternalUsers`):
 | Ki | Mit | Honnan |
 |---|---|---|
 | `publisher` + streamkulcs | `publish` az `onlive` útvonalra | bárhonnan |
+| *(1.0.010)* a jelszót a **vezérlő szerver** ellenőrzi hash ellen | `authMethod: http` | a `mediamtx.yml`-be nem kerül titok |
 | bárki jelszó nélkül | `read` az `onlive` útvonalról | **csak** `127.0.0.1` |
 | bárki jelszó nélkül | `api`, `metrics` | **csak** `127.0.0.1` |
 
@@ -256,7 +257,7 @@ tétele (Tailscale) — részletek: [`NETWORKING.md`](NETWORKING.md) 3.B és 8.
 cd infra\mediamtx
 
 # 1) MediaMTX letöltése, konfiguráció a sablonból, ütemezett feladat indításra
-powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 
 # 2) A hookok környezete (titkok)
 copy hooks\hook-env.example.bat hooks\hook-env.bat
@@ -289,7 +290,7 @@ megkülönbözteti a „megállt" esetet az „élő"-től.
 
 | Tünet | Valószínű ok | Teendő |
 |---|---|---|
-| WHIP `401` / `403` | rossz streamkulcs, vagy nem Basic fejléc megy | `mediamtx.yml` → `authInternalUsers`, app beállítások |
+| WHIP `401` / `403` | rossz streamkulcs, nem Basic fejléc, **vagy áll a vezérlő szerver** | 1.0.010 óta a MediaMTX a Node szervertől kérdez (`authHTTPAddress`): előbb a `/healthz`-t nézd, utána az app Kapcsolat fülét |
 | WHIP `201`, de nincs kép | **nincs TURN** — a média nem talál utat | 5. fejezet |
 | `ready: true`, de nem nő a `bytesReceived` | a telefon él, de nem küld (befagyott enkóder, félholt hálózat) | app újraindítás; a szerver `INTERRUPTED`-be megy 3 mp után |
 | API nem elérhető | nem fut a MediaMTX | `Get-ScheduledTask 'OnLIVE MediaMTX'`, `C:\OnLIVE\logs\mediamtx.log` |
