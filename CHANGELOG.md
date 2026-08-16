@@ -12,6 +12,47 @@ mapping between the two.
 
 ---
 
+## 1.0.016 — the yellow triangles in the sync log
+
+*2026-08-16*
+
+After 1.0.015 the build succeeds, but the sync log fills up with warnings. They
+are worth writing down, because most of them **cannot be fixed from this
+repository** — and that is not obvious from the message text.
+
+**Deprecated project options.** AGP reports seven settings as deprecated
+(`android.builtInKotlin=false`, `android.newDsl=false`,
+`android.enableAppCompileTimeRClass=false`, and four more). None of them are set
+in `android/gradle.properties`: **Android Studio passes them to AGP itself**
+during sync, for its own compatibility. Since we never set them, we cannot unset
+them either — they disappear with a newer Studio release.
+
+**Obsolete variant APIs** (`applicationVariants`, `testVariants`,
+`unitTestVariants`). Our build scripts call none of these; the warnings come
+from the same injected configuration.
+
+**The Kotlin plugin note** — *"`org.jetbrains.kotlin.android` is no longer
+required since AGP 9.0"* — is forward-looking. Built-in Kotlin support arrives
+with AGP 9, which requires **Gradle ≥ 9.5**, and the wrapper is on 9.3.0. Until
+the toolchain moves to AGP 9, the plugin stays.
+
+**The one thing we do control** is the performance suggestion AGP repeats four
+times, so it is now set:
+
+```properties
+android.dependency.excludeLibraryComponentsFromConstraints=true
+```
+
+Every version in this project is pinned in `libs.versions.toml`, so the
+dependency constraints published in AAR metadata do not decide anything here —
+skipping them only shortens the configuration phase. It is a single line, and
+deleting it reverts the change.
+
+All of this is now documented in `android/gradle.properties` itself, so the next
+time the triangles show up the answer is next to the file they are about.
+
+---
+
 ## 1.0.015 — compileSdk 36, so the new libraries build
 
 *2026-08-16*

@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.015** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.016** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -169,3 +169,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.013`](CHANGELOG.md#10013--camera-preview-and-lens-switching-actually-work) | — | Camera preview and lens switching actually work |
 | [`1.0.014`](CHANGELOG.md#10014--16-kb-page-size-compatibility-pinned-toolchain) | — | 16 KB page-size compatibility, pinned toolchain |
 | [`1.0.015`](CHANGELOG.md#10015--compilesdk-36-so-the-new-libraries-build) | — | compileSdk 36, so the new libraries build |
+| [`1.0.016`](CHANGELOG.md#10016--the-yellow-triangles-in-the-sync-log) | — | The yellow triangles in the sync log |

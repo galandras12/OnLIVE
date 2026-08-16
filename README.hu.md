@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.015 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.016 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -171,3 +171,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.013`](CHANGELOG.hu.md#10013--végre-van-kamerakép-és-a-lencseváltás-is-működik) | — | Végre van kamerakép, és a lencseváltás is működik |
 | [`1.0.014`](CHANGELOG.hu.md#10014--16-kb-os-lapméret-rögzített-eszközlánc) | — | 16 KB-os lapméret, rögzített eszközlánc |
 | [`1.0.015`](CHANGELOG.hu.md#10015--compilesdk-36-hogy-az-új-könyvtárak-leforduljanak) | — | compileSdk 36, hogy az új könyvtárak leforduljanak |
+| [`1.0.016`](CHANGELOG.hu.md#10016--a-sárga-háromszögek-a-sync-naplóban) | — | A sárga háromszögek a sync-naplóban |

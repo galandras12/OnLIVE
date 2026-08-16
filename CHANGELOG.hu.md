@@ -12,6 +12,48 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.016 — a sárga háromszögek a sync-naplóban
+
+*2026-08-16*
+
+Az 1.0.015 után a build sikeres, de a sync-napló tele van figyelmeztetésekkel.
+Érdemes leírni őket, mert a többségük **ebből a repóból nem javítható** — és ez
+a szövegükből nem derül ki.
+
+**Elavult projekt-kapcsolók.** Az AGP hét beállítást jelez elavultként
+(`android.builtInKotlin=false`, `android.newDsl=false`,
+`android.enableAppCompileTimeRClass=false` és további négy). Egyik sincs benne az
+`android/gradle.properties`-ben: **ezeket maga az Android Studio adja át** az
+AGP-nek sync közben, saját kompatibilitási okból. Mivel nem mi állítjuk be őket,
+kikapcsolni sem tudjuk — egy újabb Studio-verzióval maguktól elmúlnak.
+
+**Elavult variant API-k** (`applicationVariants`, `testVariants`,
+`unitTestVariants`). A mi build szkriptjeink egyiket sem hívják; a figyelmeztetés
+ugyanabból az injektált konfigurációból jön.
+
+**A Kotlin-plugin megjegyzése** — *„az `org.jetbrains.kotlin.android` AGP 9.0 óta
+nem kell"* — előre mutat. A beépített Kotlin támogatás az AGP 9-cel jön, ahhoz
+viszont **Gradle ≥ 9.5** kell, a wrapper pedig 9.3.0-n áll. Amíg az eszközlánc
+nem lép AGP 9-re, a plugin marad.
+
+**Amit viszont mi kezelünk**, az a négyszer megismételt teljesítmény-javaslat, ez
+mostantól be van állítva:
+
+```properties
+android.dependency.excludeLibraryComponentsFromConstraints=true
+```
+
+Ebben a projektben minden verzió fixen a `libs.versions.toml`-ban áll, tehát az
+AAR-metaadatban publikált függőségi constraintek itt úgysem döntenek el semmit —
+a kihagyásuk csak a konfigurációs fázist rövidíti. Egyetlen sor, a törlésével
+visszaáll az eredeti működés.
+
+Mindez immár magában az `android/gradle.properties`-ben is le van írva, így ha
+legközelebb előjönnek a háromszögek, a válasz ott van a fájl mellett, amiről
+szólnak.
+
+---
+
 ## 1.0.015 — compileSdk 36, hogy az új könyvtárak leforduljanak
 
 *2026-08-16*
