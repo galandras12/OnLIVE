@@ -263,7 +263,8 @@ OnLIVE/
 │   ├── src/device/            # web UI → telefon parancssor és jelenlét
 │   ├── src/log/               # ★ logger.js (egységes JSON napló) + metrika és CSV
 │   ├── src/links/             # chat-link gyűjtő
-│   ├── src/security/          # jelszó-hash, munkamenetek, sebességkorlát
+│   ├── src/security/          # jelszó-hash, munkamenetek, sebességkorlát, streamkulcs
+│   ├── src/settings/          # futásidejű szerver-beállítások (port) + port-ellenőrzés
 │   ├── src/api/               # session / ingest / admin végpontok, hitelesítés
 │   ├── src/realtime/socket.js # Socket.io — állapot-szinkron minden klienshez
 │   ├── src/web/               # /live kompozit oldal + média-admin oldal

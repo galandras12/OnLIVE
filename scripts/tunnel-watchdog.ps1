@@ -53,7 +53,7 @@ param(
     [string] $ServiceName      = 'cloudflared',
     [string] $ReadyUrl         = 'http://127.0.0.1:20241/ready',
     [string] $PublicUrl        = 'https://live.galandras.com/healthz',
-    [int]    $OriginPort       = 3000,
+    [int]    $OriginPort       = 8080,
     [int]    $IntervalSeconds  = 30,
     [int]    $FailureThreshold = 3,
     [int]    $RequestTimeoutSeconds = 10,

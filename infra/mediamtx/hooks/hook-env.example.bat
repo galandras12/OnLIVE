@@ -11,7 +11,7 @@ rem ============================================================================
 
 rem A vezérlő szerver alap-URL-je. Helyi hívás, ezért localhost — nem kell
 rem kimenni a Cloudflare alagútra ahhoz, hogy a szomszéd folyamatnak szóljunk.
-set ONLIVE_CONTROL_URL=http://127.0.0.1:3000
+set ONLIVE_CONTROL_URL=http://127.0.0.1:8080
 
 rem Közös titok. A vezérlő szerver ezt ellenőrzi az X-OnLIVE-Hook-Secret
 rem fejlécben, hogy senki más ne tudjon hamis ingest-eseményt beküldeni.

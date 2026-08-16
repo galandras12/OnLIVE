@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnLIVE — Admin · Szerver</title>
+<link rel="stylesheet" href="/admin.css">
+<style>
+  main { padding: 1.1rem; display: grid; gap: var(--gap); max-width: 1000px; }
+  .split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--gap); align-items: start; }
+
+  .port-input { display: flex; gap: .5rem; align-items: center; }
+  .port-input input { width: 8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.05rem; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; font-size: .85rem; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+  .banner { border-radius: var(--r-md); padding: .7rem .85rem; font-size: .85rem; margin-bottom: .9rem; }
+  .banner.restart { border: 1px solid rgba(245,158,11,.5); background: rgba(245,158,11,.07); }
+  .banner.good    { border: 1px solid rgba(16,185,129,.4); background: rgba(16,185,129,.06); }
+  .banner.bad     { border: 1px solid rgba(225,29,72,.5);  background: rgba(225,29,72,.07); }
+
+  /* Amit a portváltás után még át kell írni. */
+  .deps { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .55rem; }
+  .deps li { border: 1px solid var(--border-soft); border-radius: var(--r-sm); padding: .55rem .7rem; }
+  .deps .name { font-weight: 600; font-size: .88rem; }
+  .deps .file { color: var(--faint); font-size: .78rem; word-break: break-all; }
+  .deps code { display: inline-block; margin-top: .3rem; }
+  .deps .why { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
+  .deps li.mismatch { border-color: rgba(225,29,72,.5); background: rgba(225,29,72,.05); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1 class="brand"><span>OnLIVE</span> — Szerver</h1>
+  <div class="spacer"></div>
+  <span class="pill" id="portPill">…</span>
+</header>
+
+<main>
+
+  <div id="banner"></div>
+
+  <div class="split">
+
+    <!-- ================= PORT ================= -->
+    <section class="card">
+      <h2>Elérési port</h2>
+      <p class="hint">
+        Az a port, amin a vezérlő szerver hallgat. A módosítás a
+        <b>következő indításkor</b> lép életbe: menet közben nem cserélhető,
+        mert a nyitott kapcsolatok — a Socket.io, a lejátszás-proxy és az éppen
+        zajló adás — mind elszakadnának.
+      </p>
+
+      <div class="field">
+        <label for="port">Port <b id="portHint"></b></label>
+        <div class="port-input">
+          <input type="number" id="port" min="1" max="65535" step="1" inputmode="numeric">
+          <button class="btn" id="btnSave">Mentés</button>
+        </div>
+      </div>
+
+      <p class="note" id="portNote"></p>
+
+      <div class="row" style="margin-top:.6rem">
+        <button class="btn ghost" id="btnReset">Alapértelmezés (8080)</button>
+      </div>
+    </section>
+
+    <!-- ================= ÁLLAPOT ================= -->
+    <section class="card">
+      <h2>Állapot</h2>
+      <dl class="kv" id="status"></dl>
+      <p class="note" style="margin-top:.8rem">
+        A sorrend: a felületen beállított érték erősebb, mint az
+        <code>ONLIVE_SERVER_PORT</code> környezeti változó, az pedig erősebb az
+        alapértelmezésnél.
+      </p>
+    </section>
+  </div>
+
+  <!-- ================= FÜGGŐSÉGEK ================= -->
+  <section class="card">
+    <h2>Amit a portváltás után át kell írni</h2>
+    <p class="hint">
+      A szerver portja három másik helyen is szerepel. Ha ezek a régin
+      maradnak, a rendszer <b>némán</b> romlik el: a publikus címek 502-t adnak,
+      a telefon pedig 401-et kap a WHIP-en. A szerver indításkor megnézi ezeket
+      a fájlokat, és szól, ha eltérést talál.
+    </p>
+    <ul class="deps" id="deps"></ul>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="/admin-auth.js"></script>
+<script>
+(() => {
+  const { api, requireAuth } = window.OnLiveAdmin;
+  const el = (id) => document.getElementById(id);
+
+  const toast = (message, isError = false) => {
+    const box = el('toast');
+    box.textContent = message;
+    box.classList.toggle('err', isError);
+    box.classList.add('show');
+    setTimeout(() => box.classList.remove('show'), 4000);
+  };
+
+  const SOURCE_LABEL = {
+    felulet: 'webes felület',
+    env: 'ONLIVE_SERVER_PORT',
+    alapertelmezes: 'alapértelmezés',
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return '–';
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? '–' : date.toLocaleString('hu-HU');
+  };
+
+  function render(state) {
+    el('port').value = state.port;
+    el('portHint').textContent = 'alapértelmezés: ' + state.defaultPort;
+
+    const pill = el('portPill');
+    pill.textContent = 'fut: ' + (state.runningPort ?? '–');
+    pill.className = 'pill ' + (state.restartRequired ? 'off' : 'on');
+
+    // Fő üzenet: kell-e újraindítás
+    const banner = el('banner');
+    banner.className = 'banner ' + (state.restartRequired ? 'restart' : 'good');
+    banner.textContent = state.restartRequired
+      ? `A szerver most a ${state.runningPort}-es porton fut, de a beállítás szerint `
+        + `a ${state.port}-es a következő. Indítsd újra a szervert (start.bat), hogy életbe lépjen.`
+      : `A szerver a beállított porton fut (${state.runningPort}).`;
+
+    el('portNote').textContent = state.envOverridden
+      ? `Megjegyzés: az ONLIVE_SERVER_PORT (${state.envPort}) is be van állítva, de a `
+        + 'felületen megadott érték erősebb nála.'
+      : '';
+
+    const rows = [
+      ['Éppen fut ezen', String(state.runningPort ?? '–')],
+      ['Következő indításkor', String(state.port)],
+      ['Forrás', SOURCE_LABEL[state.source] ?? state.source],
+      ['ONLIVE_SERVER_PORT', state.envPort ? String(state.envPort) : 'nincs beállítva'],
+      ['Módosítva', formatDate(state.updatedAt)],
+      ['Módosította', state.updatedBy ?? '–'],
+    ];
+    const list = el('status');
+    list.textContent = '';
+    for (const [key, value] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = key;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      list.append(dt, dd);
+    }
+
+    renderDeps(state);
+  }
+
+  function renderDeps(state) {
+    const list = el('deps');
+    list.textContent = '';
+
+    // Az induláskori ellenőrzés eredménye komponensenként.
+    const checks = new Map((state.dependencyCheck ?? []).map((check) => [check.id, check]));
+
+    for (const dep of state.dependencies ?? []) {
+      const check = checks.get(dep.id);
+      const item = document.createElement('li');
+      if (check && !check.ok) item.className = 'mismatch';
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = dep.name;
+
+      const file = document.createElement('div');
+      file.className = 'file';
+      file.textContent = check?.file ?? dep.file;
+
+      const code = document.createElement('code');
+      code.textContent = dep.change;
+
+      const why = document.createElement('div');
+      why.className = 'why';
+      why.textContent = check && !check.ok
+        ? `Eltérés: a fájl most a ${check.found.join(', ')} portra mutat — ${dep.why}.`
+        : check
+          ? 'Ellenőrizve: egyezik a szerver portjával.'
+          : dep.why;
+
+      item.append(name, file, code, why);
+      list.appendChild(item);
+    }
+  }
+
+  async function load() {
+    const response = await api('/api/admin/server', {});
+    if (!response.ok) return;
+    render(await response.json());
+  }
+
+  el('btnSave').addEventListener('click', async () => {
+    const port = el('port').value;
+    const response = await api('/api/admin/server/port', {
+      method: 'POST',
+      body: JSON.stringify({ port: Number(port) }),
+    });
+    const body = await response.json();
+    if (!response.ok) return toast(body.error ?? 'A mentés nem sikerült.', true);
+
+    render(body);
+    toast(body.message);
+    if (body.warning) setTimeout(() => toast(body.warning, true), 1200);
+  });
+
+  el('btnReset').addEventListener('click', async () => {
+    if (!confirm('Visszaállítod a portot a környezeti változóra vagy az alapértelmezésre (8080)?')) return;
+
+    const response = await api('/api/admin/server/port', { method: 'DELETE' });
+    const body = await response.json();
+    if (!response.ok) return toast(body.error ?? 'Nem sikerült.', true);
+
+    render(body);
+    toast('Visszaállítva. A következő indításkor lép életbe.');
+  });
+
+  (async () => {
+    await requireAuth();
+    await load();
+  })();
+})();
+</script>
+</body>
+</html>

@@ -18,7 +18,7 @@ set MTX_PATH_ARG=%~2
 set MTX_SOURCE_TYPE_ARG=%~3
 set MTX_SOURCE_ID_ARG=%~4
 
-if "%ONLIVE_CONTROL_URL%"=="" set ONLIVE_CONTROL_URL=http://127.0.0.1:3000
+if "%ONLIVE_CONTROL_URL%"=="" set ONLIVE_CONTROL_URL=http://127.0.0.1:8080
 if "%ONLIVE_HOOK_LOG%"=="" set ONLIVE_HOOK_LOG=%~dp0..\..\..\logs\mediamtx-hooks.log
 
 set URL=%ONLIVE_CONTROL_URL%/api/ingest/%EVENT%

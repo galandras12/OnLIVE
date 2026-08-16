@@ -12,6 +12,42 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.011 — Állítható szerver-port, új alapértelmezés: 8080
+
+*2026-08-16*
+
+- **A port a webes felületről állítható** — új **Szerver** fül. A módosítás a
+  **következő indításkor** lép életbe: futó szervernek nem cserélhető a portja
+  anélkül, hogy minden nyitott kapcsolat (Socket.io, lejátszás-proxy, éppen
+  zajló adás) el ne szakadna, ezért a beállítás eltárolódik, és induláskor
+  érvényesül.
+- **Az alapértelmezett port 8080** (eddig 3000). A sablon-konfigurációk, a
+  telepítő, a watchdog és a dokumentáció is átállt vele.
+- Sorrend, ha több helyen is meg van adva: a felületen beállított érték, utána
+  az `ONLIVE_SERVER_PORT`, végül a 8080. A felületi érték szándékosan erősebb —
+  a `.env` egyszer, telepítéskor íródik, a felületen viszont az üzemeltető most
+  állít; fordítva a gomb néma maradna mindenkinél, aki a sablon `.env`-et
+  használja.
+- **A port három másik fájlban is szerepel**, és ha azok a régin maradnak, a
+  rendszer némán romlik el: a publikus címek 502-t adnak, a telefon pedig
+  401-et kap a WHIP-en. Ezért a Szerver fül kiírja a pontos sorokat, a szerver
+  pedig **induláskor összeveti ezeket a fájlokat a saját portjával**, és jelzi
+  az eltérést:
+
+  ```
+  HIBA  MediaMTX hitelesítés: a(z) C:\OnLIVE\mediamtx\mediamtx.yml még a 3000
+        portra mutat, a szerver viszont a 8080-on hallgat.
+  ```
+
+- Az 1024 alatti és a tipikusan foglalt portokat (3306, 8888, 9997 …)
+  elfogadjuk, de figyelmeztetünk rájuk — ez mérlegelés kérdése, nem hiba.
+
+**164 teszt, mind zöld.** A teljes életciklus élő szerveren ellenőrizve:
+beállítás a felületen → újraindítás → az új porton jön fel, a régin pedig már
+nem válaszol senki.
+
+---
+
 ## 1.0.010 — Streamkulcs a webes felületen, kapcsolat-beállítás a telefonon
 
 *2026-08-16*

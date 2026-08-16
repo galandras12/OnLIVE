@@ -100,8 +100,8 @@ Ha a kettő ellentmond, **a poll nyer**. A hook csak siettet.
 A `mediamtx.yml` a két hookot hívja, azok pedig POST-olnak a vezérlő szervernek:
 
 ```
-POST http://127.0.0.1:3000/api/ingest/ready
-POST http://127.0.0.1:3000/api/ingest/notready
+POST http://127.0.0.1:8080/api/ingest/ready
+POST http://127.0.0.1:8080/api/ingest/notready
 Content-Type: application/json
 X-OnLIVE-Hook-Secret: <közös titok>
 
@@ -201,7 +201,7 @@ minőségromlás.
 ### 4.1 Miért nem a böngésző beszél közvetlenül a MediaMTX-szel
 
 A `/live` oldalt a `live.galandras.com` szolgálja ki, ami a cloudflared
-konfigurációban a Node szerverre (`:3000`) mutat. A cloudflared **nem ír át
+konfigurációban a Node szerverre (`:8080`) mutat. A cloudflared **nem ír át
 útvonalat**, ezért nem lehet egy al-útvonalat egyszerűen a MediaMTX-re
 irányítani.
 

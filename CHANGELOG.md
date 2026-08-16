@@ -12,6 +12,41 @@ mapping between the two.
 
 ---
 
+## 1.0.011 — Configurable server port, new default 8080
+
+*2026-08-16*
+
+- **The port is now set from the web UI** — a new **Server** tab. It takes
+  effect on the **next start**: a running server cannot change ports without
+  tearing down every open connection (Socket.io, the playback proxy, an ongoing
+  broadcast), so the change is stored and applied at startup.
+- **The default port is 8080** (was 3000). The template configurations, the
+  installer, the watchdog and the docs all moved with it.
+- Precedence, when the port is set in more than one place: the value from the
+  web UI, then `ONLIVE_SERVER_PORT`, then 8080. The UI value deliberately wins —
+  `.env` is written once at install time, while the UI is where the operator
+  acts now; the other way round the button would be dead for everyone using the
+  template `.env`.
+- **The port lives in three other files**, and if they keep pointing at the old
+  one the system fails quietly: the public addresses answer 502 and the phone
+  gets 401 on WHIP. So the Server tab lists the exact lines to change, and the
+  server **compares those files against its own port at startup** and logs any
+  mismatch:
+
+  ```
+  HIBA  MediaMTX hitelesítés: a(z) C:\OnLIVE\mediamtx\mediamtx.yml még a 3000
+        portra mutat, a szerver viszont a 8080-on hallgat.
+  ```
+
+- Ports below 1024 and commonly occupied ones (3306, 8888, 9997 …) are accepted
+  but warned about, since that is a judgement call, not an error.
+
+**164 tests, all green.** The full lifecycle was verified against a running
+server: set the port on the UI → restart → the server comes up on the new port,
+and the old one stops answering.
+
+---
+
 ## 1.0.010 — Stream key on the web, connection settings on the phone
 
 *2026-08-16*

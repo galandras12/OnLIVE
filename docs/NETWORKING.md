@@ -45,8 +45,8 @@ más a közönsége és más a védelme.
 
 | Subdomain | Cél (helyi service) | Ki használja | Védelem |
 |---|---|---|---|
-| `admin.galandras.com` | `http://localhost:3000` | csak az üzemeltető | admin jelszó (+ opcionálisan Cloudflare Access) |
-| `live.galandras.com` | `http://localhost:3000` (`/live` útvonal) | OBS Browser Source, nézők | nyilvános, opcionális token |
+| `admin.galandras.com` | `http://localhost:8080` | csak az üzemeltető | admin jelszó (+ opcionálisan Cloudflare Access) |
+| `live.galandras.com` | `http://localhost:8080` (`/live` útvonal) | OBS Browser Source, nézők | nyilvános, opcionális token |
 | `ingest.galandras.com` | `http://localhost:8889` (MediaMTX WHIP) | **csak** az OnLIVE Android app | streamkulcs |
 
 Mindhárom subdomain **ugyanazon az egy tunnelen** megy át — egyetlen
@@ -293,7 +293,7 @@ vagy összeomlott lejátszót az OBS-ben.
 
 | Tünet | Valószínű ok | Teendő |
 |---|---|---|
-| `502 Bad Gateway` az admin URL-en | fut az alagút, de nem fut a Node szerver a 3000-en | indítsd a vezérlő szervert (`start.bat`) |
+| `502 Bad Gateway` az admin URL-en | fut az alagút, de nem fut a Node szerver a 8080-on (vagy átállították a portot) | indítsd a vezérlő szervert (`start.bat`) |
 | `530` / `1033` hibakód | nincs futó tunnel-konnektor | `Get-Service cloudflared`, `cloudflared tunnel info livestream` |
 | DNS nem oldódik fel | hiányzó vagy törölt DNS route | `cloudflared tunnel route dns livestream <hostname>` |
 | WHIP POST `201`-et ad, de nincs kép | a WebRTC média nem talál utat (nincs TURN) | lásd a [3. fejezetet](#3-fontos-a-whip-jelzés-és-a-webrtc-média-két-külön-út) |

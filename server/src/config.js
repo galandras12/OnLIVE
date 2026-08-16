@@ -8,6 +8,7 @@
  */
 
 import { fileURLToPath } from 'node:url';
+import { readServerSettingsSync, resolvePort } from './settings/store.js';
 
 /**
  * Fájlrendszeri útvonal a modul URL-jéből.
@@ -28,8 +29,25 @@ const bool = (value, fallback) => {
   return ['1', 'true', 'yes', 'igen'].includes(String(value).toLowerCase());
 };
 
+/**
+ * Az adatkönyvtárat a portnál előbb kell tudnunk: a felületen beállított port
+ * onnan (`data/server.json`) jön (1.0.011).
+ */
+const dataDir = process.env.ONLIVE_DATA_DIR || localPath('../data/');
+
+/**
+ * A port három forrásból jöhet, ebben a sorrendben: a felületen beállított
+ * érték → `ONLIVE_SERVER_PORT` → 8080. A `portSource` a banner és a felület
+ * kedvéért marad meg — hogy látszódjon, MIÉRT ezen a porton hallgat.
+ */
+const { port, source: portSource } = resolvePort({
+  stored: readServerSettingsSync(dataDir).port,
+  env: process.env.ONLIVE_SERVER_PORT,
+});
+
 export const config = {
-  port: num(process.env.ONLIVE_SERVER_PORT, 3000),
+  port,
+  portSource,
 
   /** Hitelesítés (10. szegmens). */
   streamKey: process.env.ONLIVE_STREAM_KEY ?? '',
@@ -104,7 +122,7 @@ export const config = {
   /** Fájl-alapú tárolás. */
   // `||`, nem `??`: az üresen hagyott sor a `.env`-ben is az alapértelmezést
   // jelentse, ne kikapcsolt naplózást.
-  dataDir: process.env.ONLIVE_DATA_DIR || localPath('../data/'),
+  dataDir,
   /** Dátum szerint forgó esemény-napló (11. szegmens). */
   logDir: process.env.ONLIVE_LOG_DIR || localPath('../logs/'),
   /** Induláskor a hiányzó függő folyamatok elindítása (npm start). */

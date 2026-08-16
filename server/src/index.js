@@ -13,6 +13,7 @@ import { createServer } from 'node:http';
 
 import { config } from './config.js';
 import { logger } from './util/logger.js';
+import { LogEvent } from './log/logger.js';
 import { Store } from './state/store.js';
 import { SessionController } from './state/controller.js';
 import { IngestMonitor } from './ingest/monitor.js';
@@ -29,10 +30,13 @@ import { createStreamProxyRoutes } from './api/stream-proxy.js';
 import { createDeviceRoutes } from './api/device.js';
 import { createMonitorRoutes } from './api/monitor.js';
 import { createStreamKeyRoutes } from './api/stream-key.js';
+import { createServerSettingsRoutes } from './api/server-settings.js';
 import { adminAuth, liveAuth as liveAuthFactory } from './api/auth.js';
 import { createAuthRoutes } from './api/auth-routes.js';
 import { SessionStore } from './security/sessions.js';
 import { StreamKeyStore } from './security/stream-key.js';
+import { ServerSettingsStore } from './settings/store.js';
+import { checkPortDependencies, describeMismatch } from './settings/dependencies.js';
 import { RateLimiter } from './security/rate-limit.js';
 import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
@@ -65,6 +69,23 @@ const streamKeys = new StreamKeyStore({
   logger,
   fallbackKey: config.streamKey,
 });
+/**
+ * Futásidőben állítható szerver-beállítások (1.0.011). A port a KÖVETKEZŐ
+ * indításkor lép életbe — a `config.port` már az itt tárolt értéket tükrözi.
+ */
+const serverSettings = new ServerSettingsStore({
+  dataDir: config.dataDir,
+  logger,
+  envPort: process.env.ONLIVE_SERVER_PORT,
+});
+
+/** A repó gyökere — a tunnel tartalék konfigurációjának kereséséhez. */
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const portDependencies = () => checkPortDependencies(config.port, {
+  mediamtxConfig: config.autostart.mediamtxConfig,
+  repoRoot,
+});
+
 const loginLimiter = new RateLimiter();
 setInterval(() => loginLimiter.prune(), 60_000).unref?.();
 const monitor = new IngestMonitor({ config, logger });
@@ -154,6 +175,7 @@ app.use(createRoutes({ config, controller, monitor, store, commands, limiter: lo
 app.use(createDeviceRoutes({ config, controller, commands, adminGuard, logger }));
 app.use(createMonitorRoutes({ config, store, metrics, links, adminGuard, logger }));
 app.use(createStreamKeyRoutes({ streamKeys, adminGuard, logger }));
+app.use(createServerSettingsRoutes({ settings: serverSettings, config, logger, adminGuard, dependencyCheck: portDependencies }));
 app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth, adminGuard }));
 app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth, adminGuard }));
 app.use(createStreamProxyRoutes({ config, logger, liveAuth }));
@@ -202,6 +224,7 @@ app.get('/admin/media', (req, res) => res.type('html').send(page('admin-media.ht
 app.get('/admin/obs', (req, res) => res.type('html').send(page('admin-obs.html')));
 app.get('/admin/overlay', (req, res) => res.type('html').send(page('admin-overlay.html')));
 app.get('/admin/stream-key', (req, res) => res.type('html').send(page('admin-streamkey.html')));
+app.get('/admin/server', (req, res) => res.type('html').send(page('admin-server.html')));
 app.get('/admin/monitor', (req, res) => res.type('html').send(
   page('admin-monitor.html').replace(
     '<script src="/socket.io/socket.io.js"></script>',
@@ -264,7 +287,38 @@ function banner() {
       `outro ${config.machine.outroDurationMs / 1000} mp · ` +
       `megszakadás ${config.ingest.interruptAfterMs} ms`,
   );
+
+  logger.info(`Port: ${config.port} (${{
+    felulet: 'a webes felületen beállítva',
+    env: 'ONLIVE_SERVER_PORT',
+    alapertelmezes: 'alapértelmezés',
+  }[config.portSource]})`);
+
+  portReport();
   securityReport();
+}
+
+/**
+ * Port-egyezés a szomszédos komponensekkel (1.0.011).
+ *
+ * A port átállítása után a cloudflared és a MediaMTX a RÉGI porton keresné a
+ * szervert, és a rendszer némán romlana el: a publikus címek 502-t adnának, a
+ * telefon pedig 401-et kapna a WHIP-en. Ezt nehéz kitalálni, viszont a
+ * fájlokból kiolvasható — ezért induláskor szólunk.
+ */
+function portReport() {
+  for (const check of portDependencies()) {
+    if (check.ok) continue;
+    logger.event({
+      type: LogEvent.SYSTEM,
+      level: 'error',
+      message: describeMismatch(check),
+      component: check.id,
+      file: check.file,
+      expected: check.expected,
+      found: check.found,
+    });
+  }
 }
 
 /**

@@ -147,7 +147,7 @@ a vezérlő szerverhez továbbít, az pedig a hash ellen ellenőriz.
 
 ```yaml
 authMethod: http
-authHTTPAddress: http://127.0.0.1:3000/api/ingest/auth
+authHTTPAddress: http://127.0.0.1:8080/api/ingest/auth
 ```
 
 ```

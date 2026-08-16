@@ -29,7 +29,7 @@
 [CmdletBinding()]
 param(
     [string] $InstallDir = 'C:\OnLIVE\mediamtx',
-    [string] $ControlUrl = 'http://127.0.0.1:3000',
+    [string] $ControlUrl = 'http://127.0.0.1:8080',
     # Elavult: a streamkulcs a webes felületen jön létre. Csak figyelmeztetünk rá.
     [string] $StreamKey,
     [string] $TaskName = 'OnLIVE MediaMTX',
@@ -101,7 +101,7 @@ if (-not (Test-Path $existingConfig)) {
     if (-not (Test-Path $template)) { throw "Nem található a sablon: $template" }
 
     $content = Get-Content $template -Raw
-    $content = $content.Replace('http://127.0.0.1:3000/api/ingest/auth', "$($ControlUrl.TrimEnd('/'))/api/ingest/auth")
+    $content = $content.Replace('http://127.0.0.1:8080/api/ingest/auth', "$($ControlUrl.TrimEnd('/'))/api/ingest/auth")
 
     if ($StreamKey) {
         Write-Host 'MEGJEGYZES: a -StreamKey mar nem kell ide.' -ForegroundColor Yellow

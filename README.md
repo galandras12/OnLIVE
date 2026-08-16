@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.010** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.011** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -20,6 +20,9 @@ authentication and a documented test plan.
 **1.0.010** adds stream key management to the web UI (created there, stored as a
 scrypt hash only) and a real settings screen behind the gear icon in the Android
 app, where the key and the tunnel addresses are entered.
+
+**1.0.011** makes the server port configurable from the web UI — effective on the
+next start — and moves the default port to **8080**.
 
 The per-segment history is in [`CHANGELOG.md`](CHANGELOG.md); the machine-readable
 version number is in [`versions.onlive`](versions.onlive).
@@ -115,3 +118,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`0.11`](CHANGELOG.md#011--deployment-operations-test-plan) | 11 | Deployment, operations, test plan |
 | [`1.0.000`](CHANGELOG.md#10000--base-phase-closed) | — | **Base phase closed** |
 | [`1.0.010`](CHANGELOG.md#10010--stream-key-on-the-web-connection-settings-on-the-phone) | — | Stream key on the web, connection settings on the phone |
+| [`1.0.011`](CHANGELOG.md#10011--configurable-server-port-new-default-8080) | — | Configurable server port, new default 8080 |

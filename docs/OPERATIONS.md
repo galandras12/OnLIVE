@@ -165,7 +165,7 @@ Sikeres induláskor a keretezett banner jön a konzolra:
 ┌──────────────────────────────────────────────────────────┐
 │  OnLIVE vezérlő szerver elindult                         │
 ├──────────────────────────────────────────────────────────┤
-│  Helyi:   http://localhost:3000                          │
+│  Helyi:   http://localhost:8080                          │
 │  Admin:   https://admin.galandras.com                    │
 │  Live:    https://live.galandras.com/live                │
 │  Vezérlés:https://admin.galandras.com/admin              │
@@ -177,13 +177,37 @@ Sikeres induláskor a keretezett banner jön a konzolra:
 indító figyelmeztet, de a szerver elindul — így fejlesztői gépen is
 használható. A figyelmeztetés a naplóban is ott lesz.
 
-### 3.3 Automatikus indulás bekapcsoláskor
+### 3.3 A szerver portja
+
+Alapértelmezés: **8080**. Átállítható az admin felület **Szerver** fülén, és a
+**következő indításkor** lép életbe — futó szervernek nem cserélhető a portja
+anélkül, hogy a nyitott kapcsolatok (Socket.io, lejátszás-proxy, éppen zajló
+adás) el ne szakadnának.
+
+A sorrend, ha több helyen is meg van adva:
+
+1. a felületen beállított érték (`data/server.json`),
+2. `ONLIVE_SERVER_PORT`,
+3. 8080.
+
+> **A port három másik helyen is szerepel.** Ha ezek a régin maradnak, a
+> rendszer némán romlik el: a publikus címek 502-t adnak, a telefon pedig 401-et
+> kap a WHIP-en. A Szerver fül kiírja a pontos sorokat, és a szerver
+> **induláskor összeveti** a fájlokat a saját portjával:
+>
+> | Hol | Mit kell átírni |
+> |---|---|
+> | cloudflared `config.yml` | `service: http://localhost:<port>` (mindkét hostname alatt) |
+> | MediaMTX konfiguráció | `authHTTPAddress: http://127.0.0.1:<port>/api/ingest/auth` |
+> | `scripts/tunnel-watchdog.ps1` | `-OriginPort <port>` |
+
+### 3.4 Automatikus indulás bekapcsoláskor
 
 A `cloudflared` service és a MediaMTX ütemezett feladata magától indul. Az
 OnLIVE szerverhez tedd a `start.bat` parancsikonját a
 `shell:startup` mappába, vagy regisztráld ütemezett feladatként.
 
-### 3.4 Leállítás
+### 3.5 Leállítás
 
 | Mit | Hogyan |
 |---|---|
@@ -205,6 +229,7 @@ következő adásra ([`docs/STATE-MACHINE.md`](STATE-MACHINE.md) 8.1).
 |---|---|
 | `server/logs/YYYY-MM-DD.log` | **minden esemény**, soronként egy JSON objektum; dátumváltáskor új fájl |
 | `logs/startup.log` | a `start.bat` indítási/leállási sorai |
+| `server/data/server.json` | a felületen beállított port (1.0.011) |
 | `server/data/transitions.jsonl` | csak az állapotátmenetek (a letölthető CSV alapja, 9. szegmens) |
 | `server/data/metrics.jsonl` | bitráta/felbontás minták a monitor-grafikonhoz |
 
@@ -371,9 +396,10 @@ ujjlenyomatával, majd `outro → ended (outro/done)` `source: időzítő`.
 
 | Tünet | Valószínű ok | Mit tegyél |
 |---|---|---|
+| Minden publikus cím 502-t ad, pedig fut a szerver | átállt a port, de a cloudflared még a régire mutat | Admin → Szerver fül: kiírja, mit kell átírni; a szerver indulási naplója is jelzi |
 | `admin.galandras.com` nem jön be | a tunnel nem fut | `sc query cloudflared`, `net start cloudflared`; napló: `logs/startup.log` |
 | A tunnel fut, de „502 Bad Gateway" | a Node szerver nem fut vagy más porton van | `npm start`, ellenőrizd az `ONLIVE_SERVER_PORT`-ot és a `config.yml`-t |
-| A telefon 401-et kap a WHIP-en | nincs streamkulcs, elgépelt kulcs — vagy a vezérlő szerver áll | a MediaMTX a Node szervertől kérdez: előbb `curl http://127.0.0.1:3000/healthz`, utána a kulcs |
+| A telefon 401-et kap a WHIP-en | nincs streamkulcs, elgépelt kulcs — vagy a vezérlő szerver áll | a MediaMTX a Node szervertől kérdez: előbb `curl http://127.0.0.1:8080/healthz`, utána a kulcs |
 | A telefon „csatlakozva", de nincs kép | a WHIP jelzés átment, a **média nem** — a Cloudflare Tunnel nem visz WebRTC médiát | TURN szerver kell, vagy Tailscale ([`docs/NETWORKING.md`](NETWORKING.md) 3. fejezet) |
 | A szerver `intro`-ban ragad, pedig megy a stream | a MediaMTX API nem elérhető | `curl http://127.0.0.1:9997/v3/paths/list`; a napló `A MediaMTX API nem elérhető` sorai |
 | Villog a „Megszakadt" képernyő | ingadozó mobilnet, túl rövid debounce | `ONLIVE_INGEST_INTERRUPT_AFTER_MS` növelése (alap 3000) |
@@ -398,6 +424,8 @@ felületről, mi változott a beállításokon és mikor szakadt meg a stream.
 
 | Változó | Alap | Mire jó |
 |---|---|---|
+| `ONLIVE_SERVER_PORT` | `8080` | a szerver portja — a felületen beállított érték **erősebb** ennél |
+| `ONLIVE_TUNNEL_CONFIG` | – | a cloudflared `config.yml` útvonala, ha nem a szokásos helyen van (a port-ellenőrzéshez) |
 | `ONLIVE_LOG_DIR` | `server/logs/` | a JSON napló helye |
 | `ONLIVE_AUTOSTART_MEDIAMTX` | `true` | az `npm start` indítsa-e a MediaMTX-et, ha nem fut |
 | `ONLIVE_AUTOSTART_TUNNEL` | `true` | az `npm start` indítsa-e az álló tunnel service-t |
