@@ -114,6 +114,19 @@ call :ok "Fuggosegek telepitve."
 call :log "NPM      install lefutott"
 
 :deps_done
+
+rem  Van-e egyaltalan beallitas? Ha nincs .env, a szerver alapertelmezesekkel
+rem  indul: admin jelszo es streamkulcs nelkul. Ilyenkor a config.bat a
+rem  kovetkezo lepes, nem ez.
+if not exist "%ROOT%.env" goto :no_env
+goto :env_done
+
+:no_env
+call :warn "Nincs .env fajl - nincs admin jelszo es streamkulcs."
+echo         Allitsd be: config.bat ^(vegigkerdez mindent, es beirja^)
+call :log "ENV      hianyzik"
+
+:env_done
 echo.
 
 rem ---------------------------------------------------------------------------

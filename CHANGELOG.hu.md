@@ -12,6 +12,71 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.017 — `config.bat`: a beállítás többé nem fájlszerkesztés
+
+*2026-08-16*
+
+Az OnLIVE telepítése eddig öt kézi fájlszerkesztést jelentett: másold a
+`.env.example`-t, futtass `npm run keygen`-t, másolj két sort, futtass
+`npm run hash-password`-öt, másolj még egyet, végül nyisd meg a
+`hook-env.example.bat`-ot is, és töltsd ki azt is. Mindegyik lépésben el lehet
+gépelni valamit — egy elgépelt titok pedig nem hibaüzenetet ad, hanem egy
+rendszert, ami csendben nem hitelesít.
+
+A **`config.bat`** ezt váltja ki. Sorban végigkérdezi azt a kilenc dolgot,
+amiről tényleg dönteni kell, és beírja őket a helyükre:
+
+| Lépés | Amit kérdez | Hova kerül |
+|---|---|---|
+| 1 | szerver port | `.env` **és** `server/data/server.json` |
+| 2 | admin jelszó | `.env`, **scrypt hash-ként** |
+| 3 | streamkulcs (generált vagy kézi) | `server/data/stream-key.json`, hash-elve |
+| 4 | a `/live` védelme | `.env` (`ONLIVE_LIVE_TOKEN`) |
+| 5 | publikus domain | a három `ONLIVE_PUBLIC_*_URL` |
+| 6 | stream útvonal | `.env` |
+| 7 | MediaMTX helye | `.env` |
+| 8 | tunnel service neve | `.env` |
+| 9 | hook titok (automatikus) | `.env` **és** `infra/mediamtx/hooks/hook-env.bat` |
+
+A jelszót **rejtve**, kétszer kell begépelni, és azonnal hash lesz belőle — a
+nyers jelszó egyetlen fájlba sem kerül bele, és ezt a teszt tételesen ellenőrzi
+is: átnézi az összes fájlt, amit a varázsló írt. A streamkulcsot a végén egyszer
+kiírja, mert pont ez az az érték, amit a telefonba be kell gépelni.
+
+Két beállítás szándékosan **két helyre** kerül, mert eddig épp ezekből lettek a
+néma hibák: a port a `server/data/server.json`-ba is (a felületi érték erősebb a
+`.env`-nél, tehát ha csak a `.env`-be írnánk, a megadott port hatástalan
+maradna), a hook titok pedig a `hook-env.bat`-ba is (a MediaMTX hookjai külön
+folyamatban futnak, és sosem látják a `.env`-et).
+
+### Óvatos írás
+
+A varázsló **semmit nem ír**, amíg az összefoglalóra rá nem bólintasz, és a
+korábbi `.env`-ről előtte mentés készül (`.env.bak`). A fájlt soronként
+frissíti, nem újraírja, így a sablon magyarázó kommentjei megmaradnak — különben
+az első futás egy dokumentált sablont cserélne csupasz kulcslistára.
+
+Ahol idézőjel kell, ott **aposztróf** kerül az érték köré. Ez nem ízlés kérdése:
+a Node `--env-file`-ja a kettős idézőjelen belül a `\n`-t valódi sortörésre
+cseréli, tehát egy teljesen hétköznapi `C:\new\mediamtx.exe` útvonal kettétörne.
+Az aposztrófon belül semmi ilyesmi nem történik. Mindkét viselkedést kimértük a
+Node-on, nem feltételeztük — és mindkét irányra van teszt.
+
+A varázslóhoz **nem kell `npm install`**: csak a Node beépített moduljait
+használja, tehát egy friss gépen ez lehet a legelső lépés. Linuxon és macOS-en
+`npm run config` néven érhető el.
+
+### Tesztek
+
+A készlet 172-ről 200-ra nőtt. A varázsló egy eldobható könyvtárban
+(`ONLIVE_CONFIG_ROOT`) végig le is fut, és utána a keletkezett fájlokat
+ellenőrizzük: a tárolt hash felismeri a begépelt jelszót, a kiírt streamkulcs
+illeszkedik a lemezen lévő hash-hez, a hook-környezetben ugyanaz a port és titok
+áll, a sablon kommentjei megvannak, a végén adott „nem" válasz után pedig
+egyetlen fájl sem változik.
+
+---
+
 ## 1.0.016 — a sárga háromszögek a sync-naplóban
 
 *2026-08-16*

@@ -12,6 +12,7 @@
     "start": "node --env-file-if-exists=../.env tools/start.js",
     "dev": "node --env-file-if-exists=../.env --watch src/index.js",
     "test": "node --test test/*.test.js",
+    "config": "node tools/config.js",
     "keygen": "node tools/keygen.js",
     "hash-password": "node tools/keygen.js hash",
     "start:server": "node --env-file-if-exists=../.env src/index.js"

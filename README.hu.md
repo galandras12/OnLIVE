@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.016 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.017 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -54,9 +54,30 @@ sem változnak.
 
 ## Első lépések
 
-```powershell
-copy .env.example .env          # töltsd ki a titkokat és a portokat
+**Dupla kattintás a `config.bat`-ra.** A beállító varázsló sorban, egyesével
+végigkérdezi azt, amiről tényleg dönteni kell, és maga írja be a helyükre:
 
+```
+[1/9] szerver port       -> .env + server/data/server.json
+[2/9] admin jelszó       -> scrypt hash; a jelszó maga sehova nem kerül
+[3/9] streamkulcs        -> server/data/stream-key.json, hash-elve
+[4/9] a /live védelme    -> generált lejátszási token, vagy nyilvános
+[5/9] publikus domain    -> a három tunnel-cím
+[6/9] stream útvonal     -> a WHIP cím, amit a telefon hív
+[7/9] MediaMTX helye     -> .env
+[8/9] tunnel service     -> .env
+[9/9] hook titok         -> .env + infra/mediamtx/hooks/hook-env.bat
+```
+
+Semmit nem ír, amíg a végén az összefoglalóra rá nem bólintasz, a korábbi
+`.env`-ről mentés készül (`.env.bak`), az ENTER pedig mindenhol a jelenlegi
+értéket hagyja — tehát bármikor újrafuttatható, ha csak egyetlen dolgot akarsz
+átállítani. `npm install` sem kell hozzá: csak a Node beépített moduljait
+használja.
+
+Körülötte, sorrendben:
+
+```powershell
 # 1) hálózat: fix, publikus URL-ek NAT mögül
 #    docs/NETWORKING.md → 4. fejezet (cloudflared telepítése)
 
@@ -68,21 +89,23 @@ powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 # 3) vezérlő szerver
 cd ..\..\server
 npm install
-npm run keygen                              # live token, hook titok
-npm run hash-password -- "hosszú jelszó"    # admin jelszó hash
 npm test
 npm start
 ```
 
-Ezután hozd létre a streamkulcsot a webes felületen — **Admin → Streamkulcs** —,
-és írd be a telefonon a fogaskerék mögötti **Kapcsolat** szekcióba. A szerver
-csak a hash-ét tárolja, ezért másold ki, amíg látszik.
+A streamkulcsot a varázsló a végén **egyszer** kiírja. Ezt írd be a telefonon a
+fogaskerék mögötti **Kapcsolat** szekcióba — a szerver csak a hash-ét tárolja.
+Később a webes felületen is létrehozható vagy cserélhető: **Admin → Streamkulcs**.
 
 ## Az admin jelszó beállítása
 
 Ezzel lépsz be az `/admin` felületre. Alapértelmezett jelszó **nincs**: amíg nem
 állítasz be egyet, **az admin felület csak magáról a gépről válaszol**
 (localhost) — egy félkonfigurált rendszer ne álljon nyitva a publikus címen.
+
+**A rövid út a `config.bat`**, annak a 2. lépése: kétszer bekéri a jelszót (a
+gépelés nem látszik), minősíti az erősségét, hash-eli, és beírja a `.env`-be —
+fájlt sem kell megnyitnod. Az alábbi kézi út pontosan ugyanezt csinálja.
 
 **1. Készítsd el a hash-t** (a `server` könyvtárban, idézőjelben a saját
 jelszavaddal):
@@ -172,3 +195,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.014`](CHANGELOG.hu.md#10014--16-kb-os-lapméret-rögzített-eszközlánc) | — | 16 KB-os lapméret, rögzített eszközlánc |
 | [`1.0.015`](CHANGELOG.hu.md#10015--compilesdk-36-hogy-az-új-könyvtárak-leforduljanak) | — | compileSdk 36, hogy az új könyvtárak leforduljanak |
 | [`1.0.016`](CHANGELOG.hu.md#10016--a-sárga-háromszögek-a-sync-naplóban) | — | A sárga háromszögek a sync-naplóban |
+| [`1.0.017`](CHANGELOG.hu.md#10017--configbat-a-beállítás-többé-nem-fájlszerkesztés) | — | `config.bat`: a beállítás többé nem fájlszerkesztés |

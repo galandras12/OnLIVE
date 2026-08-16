@@ -51,22 +51,52 @@ A sorrend nem szabadon választható: mindegyik lépés az előzőre épül.
 - **Node.js 20 vagy újabb** (`node -v`)
 - Cloudflare fiók + a saját domain a Cloudflare DNS-én
 
-### 2.2 A repó és a titkok
+### 2.2 A repó és a titkok — `config.bat`
 
 ```powershell
 git clone <repo> C:\OnLIVE
 cd C:\OnLIVE
-copy .env.example .env
+```
 
+Ezután **dupla kattintás a `config.bat`-ra** (1.0.017). A varázsló sorban
+végigkérdezi a fontos beállításokat, és maga írja be őket:
+
+| Lépés | Amit kérdez | Hova kerül |
+|---|---|---|
+| 1 | szerver port | `.env` **és** `server/data/server.json` |
+| 2 | admin jelszó | `.env` — **scrypt hash-ként**, a nyers jelszó sehova |
+| 3 | streamkulcs (generált vagy kézi) | `server/data/stream-key.json`, hash-elve |
+| 4 | a `/live` oldal védelme | `.env` (`ONLIVE_LIVE_TOKEN`) |
+| 5 | publikus domain | a három `ONLIVE_PUBLIC_*_URL` |
+| 6 | stream útvonal | `.env` |
+| 7 | MediaMTX helye | `.env` |
+| 8 | tunnel service neve | `.env` |
+| 9 | hook titok (automatikus) | `.env` **és** `infra/mediamtx/hooks/hook-env.bat` |
+
+Amit tudni érdemes róla:
+
+- **Semmit nem ír, amíg a végén rá nem bólintasz.** Előtte összefoglalót mutat.
+- A meglévő `.env`-ről mentés készül (`.env.bak`), és a sablon **kommentjei
+  megmaradnak** — sorcserével dolgozik, nem újraírja a fájlt.
+- ENTER = marad a jelenlegi érték, tehát később is nyugodtan újrafuttatható,
+  ha csak egyetlen dolgot akarsz átállítani.
+- **`npm install` nélkül is fut**: csak a Node beépített moduljait használja.
+- A streamkulcsot a végén **egyszer** kiírja. Írd fel — a szerveren csak a
+  hash-e marad.
+
+Kézzel is elvégezhető ugyanez, ha valamiért nem a varázslóval mennél:
+
+```powershell
+copy .env.example .env
 cd server
 npm install
 npm run keygen                              # live token, hook titok
-#   (a streamkulcs 1.0.010 óta a webes felületen jön létre — lásd 2.6)
 npm run hash-password -- "hosszú jelszó"    # az admin jelszó scrypt hash-e
+#   (a streamkulcs 1.0.010 óta a webes felületen jön létre — lásd 2.6)
 ```
 
-A `keygen` kimenetét másold a `.env`-be. A `.env` **soha nem kerül a repóba**
-(`.gitignore`), lásd [`docs/SECURITY.md`](SECURITY.md).
+A `.env` **soha nem kerül a repóba** (`.gitignore`), lásd
+[`docs/SECURITY.md`](SECURITY.md).
 
 ### 2.3 Cloudflare Tunnel (1. szegmens)
 
@@ -105,8 +135,9 @@ Az alagút kiesését figyeli és újraindítja a service-t
 
 ### 2.6 Streamkulcs a webes felületen
 
-Ez az első dolog, amit a szerver elindítása után csinálj — enélkül a telefon
-nem tud publikálni:
+Ha a `config.bat`-tal már létrehoztad (2.2, 3. lépés), ez a pont kihagyható —
+a fül állapot-táblájában „Forrás: webes felület" fog állni. Cserélni bármikor
+itt lehet:
 
 1. `https://admin.galandras.com/admin` → **Streamkulcs** fül,
 2. **Kulcs generálása** (vagy saját megadása: legalább 16 karakter, kis- és

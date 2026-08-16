@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.016** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.017** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -52,9 +52,30 @@ forwarding, no dynamic DNS, and the addresses survive an IP change or a reboot.
 
 ## Getting started
 
-```powershell
-copy .env.example .env          # fill in the secrets and ports
+**Double-click `config.bat`.** The setup wizard asks for the things that
+actually need deciding — one at a time, in order — and writes them where they
+belong:
 
+```
+[1/9] server port          -> .env + server/data/server.json
+[2/9] admin password       -> scrypt hash; the password itself is never stored
+[3/9] stream key           -> server/data/stream-key.json, hashed
+[4/9] /live protection     -> generated playback token, or public
+[5/9] public domain        -> the three tunnel URLs
+[6/9] stream path          -> the WHIP address the phone calls
+[7/9] MediaMTX location    -> .env
+[8/9] tunnel service name  -> .env
+[9/9] hook secret          -> .env + infra/mediamtx/hooks/hook-env.bat
+```
+
+Nothing is written until you confirm the summary at the end, the previous `.env`
+is backed up to `.env.bak`, and pressing ENTER keeps the current value — so it is
+safe to re-run whenever a single setting needs changing. It needs no
+`npm install`: the wizard only uses Node's built-in modules.
+
+Around it, in order:
+
+```powershell
 # 1) networking: fixed public URLs from behind NAT
 #    docs/NETWORKING.md - chapter 4 (installing cloudflared)
 
@@ -66,21 +87,24 @@ powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1
 # 3) control server
 cd ..\..\server
 npm install
-npm run keygen                              # live token, hook secret
-npm run hash-password -- "long password"    # admin password hash
 npm test
 npm start
 ```
 
-Then create the stream key on the web UI — **Admin → Stream key** — and enter it
-on the phone under the gear icon (**Connection** section). The server only ever
-stores its hash, so copy it while it is shown.
+The wizard shows the stream key **once** at the end. Enter it on the phone under
+the gear icon (**Connection** section) — the server only ever stores its hash. It
+can also be created or rotated later on the web UI: **Admin → Stream key**.
 
 ## Setting the admin password
 
 This is what you log in to `/admin` with. There is no default password: until you
 set one, **the admin UI only answers from the machine itself** (localhost) — a
 half-configured system must not stand open on a public address.
+
+**The short way is `config.bat`**, step 2: it asks for the password twice
+(typing is hidden), rates its strength, hashes it and writes the hash into
+`.env` — no file editing at all. The manual route below does exactly the same
+thing by hand.
 
 **1. Generate the hash** (in the `server` directory, with your own password in
 quotes):
@@ -170,3 +194,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.014`](CHANGELOG.md#10014--16-kb-page-size-compatibility-pinned-toolchain) | — | 16 KB page-size compatibility, pinned toolchain |
 | [`1.0.015`](CHANGELOG.md#10015--compilesdk-36-so-the-new-libraries-build) | — | compileSdk 36, so the new libraries build |
 | [`1.0.016`](CHANGELOG.md#10016--the-yellow-triangles-in-the-sync-log) | — | The yellow triangles in the sync log |
+| [`1.0.017`](CHANGELOG.md#10017--configbat-setup-is-no-longer-file-editing) | — | `config.bat`: setup is no longer file editing |

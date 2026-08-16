@@ -12,6 +12,72 @@ mapping between the two.
 
 ---
 
+## 1.0.017 — `config.bat`: setup is no longer file editing
+
+*2026-08-16*
+
+Until now, installing OnLIVE meant editing five files by hand: copy
+`.env.example`, run `npm run keygen`, copy two lines, run
+`npm run hash-password`, copy another line, then open `hook-env.example.bat` and
+fill that in too. Every one of those steps can be mistyped — and a mistyped
+secret does not produce an error message, it produces a system that silently
+refuses to authenticate.
+
+**`config.bat`** replaces all of it. It asks, in order, for the nine things that
+actually need deciding, and writes them where they belong:
+
+| Step | Question | Written to |
+|---|---|---|
+| 1 | server port | `.env` **and** `server/data/server.json` |
+| 2 | admin password | `.env`, as a **scrypt hash** |
+| 3 | stream key (generated or manual) | `server/data/stream-key.json`, hashed |
+| 4 | `/live` protection | `.env` (`ONLIVE_LIVE_TOKEN`) |
+| 5 | public domain | the three `ONLIVE_PUBLIC_*_URL` values |
+| 6 | stream path | `.env` |
+| 7 | MediaMTX location | `.env` |
+| 8 | tunnel service name | `.env` |
+| 9 | hook secret (automatic) | `.env` **and** `infra/mediamtx/hooks/hook-env.bat` |
+
+Passwords are typed **hidden** and entered twice, then hashed immediately — the
+raw password never reaches a file, and the test suite asserts exactly that by
+grepping every file the wizard writes. The stream key is shown once at the end,
+because that is the one value that has to be typed into the phone.
+
+Two settings are written in **two** places on purpose, because the second one is
+where the silent failures used to come from: the port also goes into
+`server/data/server.json` (the UI value outranks `.env`, so writing only `.env`
+would have left the answer with no effect), and the hook secret also goes into
+`hook-env.bat` (the MediaMTX hooks run in a separate process and never see
+`.env`).
+
+### Careful writing
+
+The wizard **writes nothing** until you confirm the summary, and the previous
+`.env` is copied to `.env.bak` first. The file is updated line by line rather
+than regenerated, so the template's explanatory comments survive — otherwise the
+first run would replace a documented template with a bare list of keys.
+
+Values are quoted with **single** quotes when quoting is needed. This is not a
+style choice: Node's `--env-file` turns `\n` into a real newline inside double
+quotes, so a perfectly ordinary `C:\new\mediamtx.exe` path would break in half.
+Single quotes pass everything through untouched. Both behaviours were measured
+against Node, not assumed, and both directions are covered by tests.
+
+The wizard needs **no `npm install`** — it only uses Node's built-in modules, so
+it can run as the very first step on a fresh machine. It is also available as
+`npm run config` on Linux and macOS.
+
+### Tests
+
+The suite grew from 172 to 200. The wizard is driven end to end in a throwaway
+directory (`ONLIVE_CONFIG_ROOT`), and the resulting files are checked: the stored
+hash verifies against the password that was typed, the printed stream key
+verifies against the hash on disk, the hook environment carries the same port and
+secret, the template comments are still there, and answering "no" at the end
+leaves every file untouched.
+
+---
+
 ## 1.0.016 — the yellow triangles in the sync log
 
 *2026-08-16*
