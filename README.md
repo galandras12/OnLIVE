@@ -1,101 +1,108 @@
 # OnLIVE
 
-Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló
-adás, amit egy self-hosted szerver fogad, intro/outro/megszakadás-logikával és
-overlay-jel (logó, chat, értesítés) lát el, majd OBS Browser Source-ként és
-közvetlen weblejátszóként is kiszolgál.
+**Version 1.0** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
-**Alapelv:** a telefon kizárólag adatfolyam-forrás — minden vezérlési logika a
-szerveren és a web UI-n van.
+Live broadcasting system. An Android phone (camera/screen + audio) publishes over
+WHIP to a self-hosted server, which applies the intro / outro / interruption
+logic and the overlays (logo, chat, notification), then serves the result both as
+an OBS Browser Source and as a direct web player.
 
-## Dokumentáció
+**Core principle:** the phone is a stream source and nothing else — every piece of
+control logic lives on the server and in the web UI.
 
-| Dokumentum | Tartalom |
-|---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **0. szegmens** — a 4 komponens és szigorúan elkülönített felelősségi köreik |
-| [`docs/NETWORKING.md`](docs/NETWORKING.md) | **1. szegmens** — Cloudflare Tunnel, subdomainek, watchdog, WebRTC-médiaút |
-| [`docs/ANDROID.md`](docs/ANDROID.md) | **2. szegmens** — capture, WHIP publish, háttérfutás, reconnect |
-| [`android/`](android/) | az OnLIVE Android app forrása (Kotlin, CameraX + MediaProjection + WebRTC) |
-| [`docs/INGEST.md`](docs/INGEST.md) | **3. szegmens** — MediaMTX, kimeneti formátumok, ingest-figyelés, health-check |
-| [`infra/mediamtx/`](infra/mediamtx/) | MediaMTX konfiguráció, hookok, telepítő és ingest-próba |
-| [`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md) | **4. szegmens** — állapotgép, a 2 perces szabály, Socket.io események, API |
-| [`server/`](server/) | a vezérlő szerver forrása (Node.js + Express + Socket.io) |
-| [`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md) | **5. szegmens** — intro/outro/megszakadt média, validáció, előnézet |
-| [`docs/OBS.md`](docs/OBS.md) | **6. szegmens** — Browser Source beállítás, átlátszó vászon, WHEP/HLS lejátszás |
-| [`docs/WIDGETS.md`](docs/WIDGETS.md) | **7. szegmens** — widgetek, drag-and-drop szerkesztő, sandboxolt beágyazások |
-| [`docs/ADMIN-UI.md`](docs/ADMIN-UI.md) | **8. szegmens** — admin felület, design tokenek, web→telefon parancscsatorna |
-| [`docs/MONITORING.md`](docs/MONITORING.md) | **9. szegmens** — stream-monitor, letölthető CSV napló, chat-link gyűjtő |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | **10. szegmens** — jogosultsági szintek, bejelentkezés, streamkulcs, CSRF |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **11. szegmens** — telepítés, indítás, naplózás, tesztelési terv, hibaelhárítás |
-| [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` sablon + telepítési gyorstalpaló |
-| [`scripts/`](scripts/) | tunnel watchdog és annak ütemezett feladatként való regisztrálása |
+## Version 1.0
 
-## Komponensek
+Version 1.0 closes the base phase of the project: the eleven planned segments
+(`0.1` – `0.11`) are complete, so the system is usable end to end — from pressing
+"Start" on the phone to the composited picture appearing in OBS, with logging,
+authentication and a documented test plan.
 
-1. **Android app** (Kotlin, CameraX + MediaProjection) — capture, kódolás, WHIP publish.
-2. **Media ingest** (MediaMTX) — WHIP be, WebRTC/RTMP/HLS ki.
-3. **Vezérlő szerver** (Node.js + Express + Socket.io, fájl-alapú JSON/lowdb) — állapotgép, overlay-kompozíció, admin API.
-4. **Web UI** — `/admin` vezérlőfelület és `/live` kompozit lejátszó (OBS Browser Source).
+The per-segment history is in [`CHANGELOG.md`](CHANGELOG.md); the machine-readable
+version number is in [`versions.onlive`](versions.onlive).
 
-## Publikus végpontok
+## Components
+
+1. **Android app** (Kotlin, CameraX + MediaProjection + WebRTC) — capture,
+   encoding, WHIP publish.
+2. **Media ingest** (MediaMTX) — WHIP in; WebRTC / RTMP / HLS out.
+3. **Control server** (Node.js + Express + Socket.io, file-based JSON storage) —
+   state machine, overlay composition, admin API.
+4. **Web UI** — the `/admin` control surface and the `/live` composite player
+   (OBS Browser Source).
+
+## Public endpoints
 
 ```
-Admin UI     : https://admin.galandras.com/admin    (fülek: vezérlés, overlay, média, OBS, monitor)
+Admin UI     : https://admin.galandras.com/admin    (tabs: control, overlay, media, OBS, monitor)
 Live / OBS   : https://live.galandras.com/live      (Browser Source, 1920x1080)
-Chat-linkek  : https://live.galandras.com/links     (mobilra, egy koppintás)
+Chat links   : https://live.galandras.com/links     (mobile, one tap)
 WHIP ingest  : https://ingest.galandras.com/<stream>/whip
 ```
 
-Mindhárom egyetlen Cloudflare Tunnelen keresztül érhető el — nincs
-port-forwarding, nincs dinamikus DNS, és a címek IP-váltás vagy újraindítás
-után sem változnak.
+All of them are reachable through a single Cloudflare Tunnel — no port
+forwarding, no dynamic DNS, and the addresses survive an IP change or a reboot.
 
-## Első lépések
+## Getting started
 
 ```powershell
-copy .env.example .env          # töltsd ki a titkokat és a portokat
+copy .env.example .env          # fill in the secrets and ports
 
-# 1) hálózat: fix, publikus URL-ek NAT mögül
-#    docs/NETWORKING.md → 4. fejezet (cloudflared telepítése)
+# 1) networking: fixed public URLs from behind NAT
+#    docs/NETWORKING.md - chapter 4 (installing cloudflared)
 
-# 2) media ingest: a telefon ide publikál
-#    docs/INGEST.md → 6. fejezet
+# 2) media ingest: this is where the phone publishes
+#    docs/INGEST.md - chapter 6
 cd infra\mediamtx
-powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<streamkulcs>"
+powershell -ExecutionPolicy Bypass -File .\install-mediamtx.ps1 -StreamKey "<stream key>"
 
-# 3) vezérlő szerver
+# 3) control server
 cd ..\..\server
 npm install
-npm run keygen                              # streamkulcs, live token, hook titok
-npm run hash-password -- "hosszú jelszó"    # admin jelszó hash
+npm run keygen                              # stream key, live token, hook secret
+npm run hash-password -- "long password"    # admin password hash
 npm test
 npm start
 ```
 
-Ezek után a napi indítás egyetlen mozdulat: **`start.bat`** a projekt
-gyökerében (tunnel-ellenőrzés → MediaMTX → vezérlő szerver, nyitva maradó
-konzollal). Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+After that the daily start is a single action: **`start.bat`** in the project
+root (tunnel check → MediaMTX → control server, in a console window that stays
+open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
-## Fejlesztési állapot — szegmensek
+## Documentation
 
-A rendszer előre rögzített, 12 szegmensből álló terv szerint épül. Minden
-szegmens egy önálló, működő réteget ad hozzá, és a felelősségi körök nem
-csúsznak át egymásba (lásd [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+| Document | Contents |
+|---|---|
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | the 4 components and their strictly separated responsibilities |
+| [`docs/NETWORKING.md`](docs/NETWORKING.md) | **0.1** — Cloudflare Tunnel, subdomains, watchdog, the WebRTC media path |
+| [`docs/ANDROID.md`](docs/ANDROID.md) | **0.2** — capture, WHIP publish, background survival, reconnect |
+| [`android/`](android/) | source of the OnLIVE Android app |
+| [`docs/INGEST.md`](docs/INGEST.md) | **0.3** — MediaMTX, output formats, ingest monitoring, health check |
+| [`infra/mediamtx/`](infra/mediamtx/) | MediaMTX configuration, hooks, installer, ingest probe |
+| [`docs/STATE-MACHINE.md`](docs/STATE-MACHINE.md) | **0.4** — state machine, the 2-minute rule, Socket.io events, API |
+| [`server/`](server/) | source of the control server |
+| [`docs/OVERLAY-MEDIA.md`](docs/OVERLAY-MEDIA.md) | **0.5** — intro / outro / interrupted media, validation, preview |
+| [`docs/OBS.md`](docs/OBS.md) | **0.6** — Browser Source setup, transparent canvas, WHEP/HLS playback |
+| [`docs/WIDGETS.md`](docs/WIDGETS.md) | **0.7** — widgets, drag-and-drop editor, sandboxed embeds |
+| [`docs/ADMIN-UI.md`](docs/ADMIN-UI.md) | **0.8** — admin surface, design tokens, web→phone command channel |
+| [`docs/MONITORING.md`](docs/MONITORING.md) | **0.9** — stream monitor, downloadable CSV log, chat-link collector |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | **0.10** — privilege tiers, login, stream key, CSRF |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | **0.11** — installation, startup, logging, test plan, troubleshooting |
+| [`infra/cloudflared/`](infra/cloudflared/) | tunnel `config.yml` template + installation quick start |
+| [`scripts/`](scripts/) | tunnel watchdog and its scheduled-task registration |
 
-| # | Szegmens | Állapot |
+## Version history
+
+| Version | Segment | Title |
 |---|---|---|
-| 0 | Architektúra és komponens-felelősségek | ✅ kész |
-| 1 | Hálózati réteg és elérhetőség | ✅ kész |
-| 2 | Android alkalmazás: capture és publish | ✅ kész |
-| 3 | Media ingest réteg beállítása | ✅ kész |
-| 4 | Vezérlő szerver: állapotgép | ✅ kész |
-| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | ✅ kész |
-| 6 | OBS integráció (Browser Source) | ✅ kész |
-| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | ✅ kész |
-| 8 | Web UI: admin/vezérlő felület | ✅ kész |
-| 9 | Stream-monitor, letölthető napló és link-gyűjtő | ✅ kész |
-| 10 | Biztonság és hitelesítés | ✅ kész |
-| 11 | Telepítés, üzemeltetés, tesztelési terv | ✅ kész |
-
-Mind a 12 szegmens elkészült. Az üzembe helyezés, a napi indítás és a
-kötelező próbák leírása: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+| [`0.1`](CHANGELOG.md#01--architecture-and-networking) | 1 | Architecture and networking |
+| [`0.2`](CHANGELOG.md#02--android-app-capture-and-publish) | 2 | Android app: capture and publish |
+| [`0.3`](CHANGELOG.md#03--media-ingest-layer) | 3 | Media ingest layer |
+| [`0.4`](CHANGELOG.md#04--control-server-the-state-machine) | 4 | Control server: the state machine |
+| [`0.5`](CHANGELOG.md#05--overlay-and-media-handling) | 5 | Overlay and media handling |
+| [`0.6`](CHANGELOG.md#06--obs-integration) | 6 | OBS integration |
+| [`0.7`](CHANGELOG.md#07--widget-system) | 7 | Widget system |
+| [`0.8`](CHANGELOG.md#08--admin-web-ui) | 8 | Admin web UI |
+| [`0.9`](CHANGELOG.md#09--stream-monitor-log-and-links) | 9 | Stream monitor, log and links |
+| [`0.10`](CHANGELOG.md#010--security-and-authentication) | 10 | Security and authentication |
+| [`0.11`](CHANGELOG.md#011--deployment-operations-test-plan) | 11 | Deployment, operations, test plan |
+| [`1.0.000`](CHANGELOG.md#10000--base-phase-closed) | — | **Base phase closed** |

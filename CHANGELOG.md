@@ -1,0 +1,277 @@
+# Changelog
+
+[Magyarul](CHANGELOG.hu.md)
+
+OnLIVE was built along a fixed plan of **eleven segments**. Each segment added
+one self-contained, working layer, and responsibilities were never allowed to
+bleed into each other (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
+
+Segment *N* is released as version **0.N**, and version **1.0.000** closes the
+base phase. The internal documents still speak of "segments" — this file is the
+mapping between the two.
+
+---
+
+## 1.0.000 — Base phase closed
+
+*2026-08-16*
+
+The eleven planned segments are complete: the system works end to end, from
+pressing "Start" on the phone to the composited picture appearing in OBS.
+
+Included in this release beyond `0.11`, from a full audit of the codebase:
+
+- **`/live?preview=`** put its parameter into `innerHTML`. Since `/live` is served
+  on every host, a crafted `admin…/live?preview=…` link executed code in a
+  logged-in admin's origin — and the CSRF token lives in `sessionStorage`, so
+  that meant session takeover. The screen name is now whitelisted.
+- **`/admin/login?next=`** accepted `javascript:` URLs and external addresses,
+  which `location.replace()` then executed or followed. Only own absolute paths
+  are accepted now.
+- **The admin surface rendered phone telemetry with `innerHTML`** — the holder of
+  the stream key (a lower privilege tier) could run code in the admin page.
+- **`trust proxy: true` → `'loopback'`.** Previously the first element of the
+  client-supplied `X-Forwarded-For` became `req.ip`, so an attacker could claim a
+  fresh IP for every attempt and never hit the login rate limit.
+- **`new URL(...).pathname` → `fileURLToPath`.** On Windows — the target platform —
+  the former yields `/C:/…` and percent-encodes spaces, so the data and log
+  directories were never created under a path like `C:\Program Files\OnLIVE`.
+- **A malformed cookie** (`onlive_session=%`) threw inside the cookie parser,
+  which runs in the auth middleware: one broken cookie meant HTTP 500 on every
+  request.
+- **The log stream was buffered**, so `process.exit` dropped the lines that had
+  not been flushed yet — exactly the ones about shutting down.
+- Smaller fixes: the metrics recorder called `.toFixed()` on phone-supplied
+  values (a non-number silently lost the sample); resolution appeared in two
+  forms in the log (`P720` vs `720p`), making every change look like two; the
+  bulk overlay-replace endpoint logged nothing; `start.bat` became pure ASCII
+  (the Windows console codepage is not UTF-8).
+
+**118 tests, all green.** The two injection bugs were verified in a real headless
+browser both before and after the fix; the rate limit and the log flush were
+verified against a running server.
+
+---
+
+## 0.11 — Deployment, operations, test plan
+
+*2026-08-15* · segment 11
+
+- **One entry point.** `npm start` (`server/tools/start.js`) checks the
+  cloudflared service, checks MediaMTX (API probe, starts it if missing), then
+  starts the control server **in the same process** — one window, one log, one
+  Ctrl+C. A missing dependency is a warning, never fatal.
+- **`start.bat`** in the project root: the tunnel check happens *before* Node
+  (that is where it surfaces if administrator rights are needed), `npm install`
+  on first launch, a console window that stays open, and timestamped lines
+  appended to `logs/startup.log`.
+- **A unified structured logger** (`server/src/log/logger.js`) used by every
+  component. Colored line to the console, one JSON object per line to
+  `logs/YYYY-MM-DD.log`, rotating by date.
+- What the log records: WHIP ingest connect/disconnect (telling "stalled" apart
+  from "disconnected"), Socket.io connect/disconnect with the **OBS Browser
+  Source flagged separately** by User-Agent, every state machine transition, and
+  **every settings change with its old and new value** (quality, lens, source,
+  widget, media, outro length, chat links). Every entry carries the source
+  (phone / web UI / OBS / ingest / timer) and a client identifier — of the session
+  token only a 6-character fingerprint, never the whole thing.
+- **The four mandated test scenarios** as runnable tests
+  (`server/test/scenarios.test.js`): first start → intro until the stream
+  arrives; an interruption after more than 2 minutes live → resumes on its own;
+  pause with no reconnect timer; "End" from the web UI → outro → timed `ended`.
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md): installation order, start/stop, log
+  format and how to read it, the manual walkthrough of the four scenarios with
+  expected results, troubleshooting table.
+
+---
+
+## 0.10 — Security and authentication
+
+*2026-08-15* · segment 10
+
+- **Three privilege tiers, strictly separated:** admin (session cookie), phone
+  (stream key), viewer/OBS (optional playback token). The playback token grants
+  **view only** — it can neither control the session nor read telemetry, and a
+  test enforces this.
+- Admin login with **scrypt-hashed** password, HttpOnly + SameSite=Strict
+  session cookie, and a **double-submit CSRF token** that the JavaScript keeps
+  separately (the cookie alone is not enough for a state-changing request).
+- **Rate limiting** per IP with exponential lockout: 5 failed attempts → 30 s,
+  doubling up to 15 minutes. A successful login clears the counter.
+- The WHIP ingest is protected by a unique, high-entropy stream key — the same
+  value in the MediaMTX configuration.
+- Security headers (CSP, `nosniff`, `frame-ancestors`), and a security status
+  panel that flags weak or missing secrets at startup and on the admin surface.
+
+---
+
+## 0.9 — Stream monitor, log and links
+
+*2026-08-15* · segment 9
+
+- **Stream monitor:** live technical data (instantaneous bitrate, resolution,
+  framerate, RTT, jitter, packet loss) plus a small preview of the **raw incoming
+  stream** — deliberately distinct from the `/live` composite, as an admin-only
+  diagnostic.
+- **Downloadable log:** every state transition with durations and average /
+  min / max bitrate per period, filtered by session or date range. CSV with BOM
+  and semicolons for Hungarian Excel, comma-separated for Google Sheets.
+- An embedded chart of the bitrate timeline with the interruptions marked in red.
+- **Chat-link collector:** named links that open in a new tab with one tap on a
+  phone — explicitly *not* the embedded widgets of `0.7`. Only `http`/`https`
+  schemes are accepted.
+
+---
+
+## 0.8 — Admin web UI
+
+*2026-08-15* · segment 8
+
+- The full control surface at `/admin`: live status, Start/End (either surface
+  can do it), camera selector, resolution / bitrate / framerate / audio sliders,
+  widget editor, overlay-media uploader with preview, plus the `0.9` monitor and
+  link collector as separate tabs.
+- **The web→phone command channel.** Without it the two surfaces drift apart:
+  after an admin presses "End" the phone would keep publishing and keep showing
+  "LIVE". Commands ride along in the response to the phone's telemetry request —
+  zero extra requests, at most 3 seconds of delay.
+- Two-way real-time sync over Socket.io, and a minimalist dark design with shared
+  tokens (`admin.css`).
+
+---
+
+## 0.7 — Widget system
+
+*2026-08-14* · segment 7
+
+- Freely movable and resizable widgets on a fixed 1920×1080 canvas, with a
+  drag-and-drop editor: logo (uploaded image), 3rd-party embed (chat, alerts),
+  text and notification.
+- Position, size, visibility and layer are persisted, so a layout **survives a
+  server restart**.
+- **The embed sandbox is the heart of this segment:** third-party code runs in
+  its own document, in an `allow-scripts` iframe **without** `allow-same-origin`,
+  reachable only through a per-widget random key. So the embedded script gets an
+  opaque origin — it cannot reach the parent DOM, the cookies, or read the
+  playback token out of its own address bar.
+- Rendering is incremental: a chat iframe is not recreated on a state change, so
+  it does not reconnect and lose its history.
+
+---
+
+## 0.6 — OBS integration
+
+*2026-08-14* · segment 6
+
+- The `/live` composite page: a single canvas carrying the state screen and the
+  active overlay widgets, with a transparent background wherever there is no
+  content. In OBS it is one Browser Source at 1920×1080.
+- Video over **WHEP** (WebRTC, ~0.2–0.5 s latency), with HLS as an automatic
+  fallback.
+- A **playback proxy** so the browser talks to a single origin and MediaMTX can
+  keep its read permission bound to localhost. The proxy rewrites the WHEP
+  `Location` header: without that, an OBS restart would leave dead readers piling
+  up inside MediaMTX.
+- Socket.io keeps the page in step with state changes and overlay moves without a
+  reload.
+
+---
+
+## 0.5 — Overlay and media handling
+
+*2026-08-14* · segment 5
+
+- Admin-uploadable intro / interrupted / outro media (jpg, png, webp, mp4, webm)
+  with a configurable outro duration, local file storage and preview.
+- **Validation looks at the file's content (magic bytes)**, not at the extension
+  or the client-supplied `Content-Type`. An HTML file renamed to `.mp4` and
+  embedded into `/live` would otherwise run arbitrary script.
+- When the outro expires the state machine moves to `ended`: the publisher
+  connection is actively dropped, so a stuck phone cannot make the next session
+  jump straight to `live` off an old stream.
+- The outro length is adjustable at runtime — the controller asks for it as a
+  function, not as a fixed value.
+
+---
+
+## 0.4 — Control server: the state machine
+
+*2026-08-12* · segment 4
+
+- The `idle → intro → live → reconnecting / paused → outro → ended` machine as a
+  **pure module** with an injectable clock and returned effects, so it is fully
+  testable without I/O.
+- **The 2-minute rule affects one decision only:** whether an interruption shows
+  the "Interrupted" screen (≥ 2 minutes live) or "Starting soon" (below it).
+  Nothing else.
+- `paused` is independent of the threshold and has no backoff timer: the stream
+  coming back does **not** lift it, only an explicit "Resume" does.
+- A Socket.io event for every transition, so the web UI and the Browser Source
+  follow in real time.
+- **Ingest signalling is level-triggered, not edge-triggered.** An end-to-end test
+  caught the bug: pressing "Start" while the phone was already publishing
+  produced no rising edge, so the server sat in `intro` while a live stream was
+  running. Now the current situation is sent on every poll and the machine is
+  idempotent.
+
+---
+
+## 0.3 — Media ingest layer
+
+*2026-08-12* · segment 3
+
+- MediaMTX configuration: WHIP in; WebRTC, RTMP and low-latency HLS out.
+- **Ingest monitoring on two channels.** Pull (the API polled every second) is the
+  source of truth; push (the `runOnReady` / `runOnNotReady` hooks) only requests
+  an immediate sample. That way a hook can hurry the decision but never falsify
+  it.
+- `ready: true` is not enough on its own — a publisher can stay connected while
+  the data stops, so `bytesReceived` movement is what counts. This is what tells
+  "stalled" apart from "disconnected".
+- The interruption report is debounced (3 s by default) so a momentary network
+  hiccup does not make the `/live` page flicker; recovery, by contrast, is
+  reported immediately.
+- A health-check endpoint plus an installer and ingest probe script.
+
+---
+
+## 0.2 — Android app: capture and publish
+
+*2026-08-12* · segment 2
+
+- Camera capture with CameraX, live lens switching (front / main / tele /
+  ultra-wide) in under a second, torch, photo capture and parallel local
+  recording.
+- **Screen mode** over MediaProjection, and a one-button camera↔screen toggle.
+- Microphone capture with quality selectors; resolution, bitrate and framerate
+  are reported to the server so the admin surface shows what is actually going
+  out.
+- **WHIP publish** (RFC 9725) over WebRTC, with automatic reconnect using
+  exponential backoff.
+- **Background survival**, which is what makes this usable in practice: the whole
+  capture pipeline runs in a Foreground Service (not the Activity), with the
+  Android 14 FGS types (`camera|microphone|mediaProjection`), a wake lock, a
+  battery-optimization exemption prompt, and a persistent notification with
+  Pause/Stop actions. PIP is a bonus, not the mechanism.
+- The app knows nothing about intro, outro or overlays. It reports what the user
+  pressed: `POST /session/start`, `/pause`, `/resume`, `/end`.
+
+---
+
+## 0.1 — Architecture and networking
+
+*2026-08-12* · segments 0–1
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): the four components and their strictly
+  separated responsibilities, including an explicit list of what each component
+  is **not** responsible for. Every later segment refers back to this.
+- **Cloudflare Tunnel** instead of port forwarding or dynamic DNS: an outbound
+  connection, so it works behind NAT and CGNAT, and the addresses survive an IP
+  change or a reboot. Three subdomains — admin, live, ingest.
+- Installed as a Windows service, with a watchdog that checks on three levels
+  (process, connector, public endpoint) and restarts the tunnel automatically.
+  If it is the Node server that is down, that is not the tunnel's fault, so the
+  watchdog leaves it alone.
+- Documented honestly: **the WHIP signalling passes through the tunnel, the
+  WebRTC media does not** — that needs TURN or Tailscale. Along with what happens
+  when the tunnel breaks versus when only the phone's connection does.

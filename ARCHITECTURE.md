@@ -283,19 +283,24 @@ OnLIVE/
 
 ## 7. Szegmens-térkép
 
-A teljes, előre rögzített szegmens-lista:
+A teljes, előre rögzített szegmens-lista. A `Verzió` oszlop a kiadás-jelölés:
+az *N*. szegmens a **0.N** verzió, a lezáró kiadás pedig az **1.0.000**
+(lásd [`CHANGELOG.hu.md`](CHANGELOG.hu.md)).
 
-| # | Szegmens | Elsődleges komponens | Állapot |
-|---|---|---|---|
-| 0 | Architektúra és komponens-felelősségek | — (ez a dokumentum) | ✅ kész |
-| 1 | Hálózati réteg és elérhetőség | infra | ✅ kész |
-| 2 | Android alkalmazás: capture és publish | Android | ✅ kész |
-| 3 | Media ingest réteg beállítása | ingest | ✅ kész |
-| 4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
-| 5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
-| 6 | OBS integráció (Browser Source) | web | ✅ kész |
-| 7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
-| 8 | Web UI: admin/vezérlő felület | web | ✅ kész |
-| 9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ✅ kész |
-| 10 | Biztonság és hitelesítés | szerver | ✅ kész |
-| 11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ✅ kész |
+| # | Verzió | Szegmens | Elsődleges komponens | Állapot |
+|---|---|---|---|---|
+| 0 | 0.1 | Architektúra és komponens-felelősségek | — (ez a dokumentum) | ✅ kész |
+| 1 | 0.1 | Hálózati réteg és elérhetőség | infra | ✅ kész |
+| 2 | 0.2 | Android alkalmazás: capture és publish | Android | ✅ kész |
+| 3 | 0.3 | Media ingest réteg beállítása | ingest | ✅ kész |
+| 4 | 0.4 | Vezérlő szerver: állapotgép | szerver | ✅ kész |
+| 5 | 0.5 | Overlay- és médiakezelés (intro/outro/megszakadt) | szerver / web | ✅ kész |
+| 6 | 0.6 | OBS integráció (Browser Source) | web | ✅ kész |
+| 7 | 0.7 | Widget rendszer (logó / chat / értesítés, drag-and-drop) | web | ✅ kész |
+| 8 | 0.8 | Web UI: admin/vezérlő felület | web | ✅ kész |
+| 9 | 0.9 | Stream-monitor, letölthető napló és link-gyűjtő | szerver / web | ✅ kész |
+| 10 | 0.10 | Biztonság és hitelesítés | szerver | ✅ kész |
+| 11 | 0.11 | Telepítés, üzemeltetés, tesztelési terv | szerver / infra | ✅ kész |
+
+A tizenegy szegmenssel az alap szakasz lezárult: a kiadás az **1.0.000**
+([`versions.onlive`](versions.onlive)).
