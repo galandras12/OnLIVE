@@ -62,6 +62,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              Párosítás mély hivatkozással (1.0.110).
+
+              Az admin felület Streamkulcs fülén a „Párosítás indítása" gomb ad
+              egy `onlive://pair?token=…&server=…` linket. Ha az admin oldalt a
+              TELEFONON nyitod meg, egy koppintás behozza ide az összes
+              beállítást — nincs mit begépelni, tehát elgépelni sem.
+
+              A saját séma szándékos: nem akarunk `https` linkeket elkapni a
+              felhasználó domainjéről (App Links ellenőrzés, más appok linkjei),
+              csak azt az egy műveletet kezelni, amit mi adunk ki.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="onlive" android:host="pair" />
+            </intent-filter>
         </activity>
 
         <!-- ================================================================

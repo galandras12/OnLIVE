@@ -73,6 +73,34 @@ class ControlApi(
         return Endpoints.choose(settings, reachable)
     }
 
+    /**
+     * A párosító csomag letöltése a tokennel (1.0.110).
+     *
+     * A token MAGA a hitelesítés: egyszer használható, rövid életű. Ezért nem
+     * kell hozzá streamkulcs — épp azt hozza el.
+     */
+    suspend fun fetchPairing(server: String, token: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val base = server.trim().trimEnd('/')
+                require(base.isNotBlank()) { "A párosító link nem tartalmaz szerver címet." }
+
+                val request = Request.Builder().url("$base/api/pair/$token").get().build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    when (response.code) {
+                        200 -> body
+                        404 -> error(
+                            "A párosítás lejárt vagy már felhasználták. " +
+                                "Indíts újat az admin felületen (Streamkulcs fül).",
+                        )
+                        429 -> error("Túl sok próbálkozás — várj egy kicsit.")
+                        else -> error("A szerver HTTP ${response.code} választ adott.")
+                    }
+                }
+            }.onFailure { Log.w(TAG, "párosítás letöltése sikertelen: ${it.message}") }
+        }
+
     /** A gyorsítótár eldobása — hálózatváltásnál és adásindításnál hívjuk. */
     fun forgetLocalProbe() {
         localProbe = null

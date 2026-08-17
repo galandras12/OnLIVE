@@ -258,6 +258,26 @@ class AppSettings(private val context: Context) {
     suspend fun setSource(value: CaptureSource) =
         context.dataStore.edit { it[Keys.source] = value.name }
 
+    /**
+     * A szervertől kapott párosító csomag alkalmazása (1.0.110).
+     *
+     * EGYETLEN íróművelet: a címek, a kulcs és a TURN együtt kerülnek be, hogy
+     * ne lehessen félig párosított állapot. A kapcsolat módhoz nem nyúlunk — az
+     * a felhasználó döntése, a szerver nem tudhatja, épp otthon van-e.
+     */
+    suspend fun importPairing(payload: PairingPayload) = context.dataStore.edit {
+        it[Keys.controlUrl] = payload.control
+        it[Keys.ingestUrl] = payload.ingest
+        it[Keys.streamPath] = payload.streamPath
+        it[Keys.streamKey] = payload.streamKey
+        it[Keys.ingestUser] = payload.ingestUser
+        it[Keys.localControlUrl] = payload.localControl
+        it[Keys.localIngestUrl] = payload.localIngest
+        it[Keys.turnUrl] = payload.turnUrl
+        it[Keys.turnUsername] = payload.turnUsername
+        it[Keys.turnCredential] = payload.turnCredential
+    }
+
     suspend fun setOrientation(value: StreamOrientation) =
         context.dataStore.edit { it[Keys.orientation] = value.name }
 

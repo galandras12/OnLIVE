@@ -377,6 +377,42 @@ kiírja a HTTP kódot és az üzenetet. A 404/405 külön mondatot kap, mert az 
 hálózati zökkenő, hanem címhiba: az ingest cím a vezérlő szerverre mutat a
 MediaMTX helyett.
 
+## 4.6 Párosítás: a szerver adja át a beállításokat (1.0.110)
+
+Az elmúlt kiadások hibái sorra a **kézi begépelésből** jöttek: egy `/admin`
+végződés a vezérlő címben, egy bennfelejtett `/ingest` az ingest címben, egy
+elgépelt kulcs. Egyik sem hibaüzenetet adott, hanem néma nem-működést — és
+mindegyiket a szerver *tudta volna* helyesen.
+
+Ezért a szerver most átadja a teljes beállítást. Nem kell hozzá felhő, fiók
+vagy OAuth:
+
+| Út | Mikor | Hogyan |
+|---|---|---|
+| **Mély hivatkozás** | az admin oldalt a telefonon nézed | `onlive://pair?token=…&server=…` — az app letölti a csomagot a tokennel |
+| **Fájl** | az admin oldalt gépen nézed | `onlive-pairing.json` → fogaskerék → *Beállítás importálása fájlból* |
+
+A csomag: vezérlő és ingest alap-cím, helyi (LAN/Tailscale) címek, stream
+útvonal, ingest felhasználó, **nyers streamkulcs**, TURN adatok.
+
+Amit a biztonság megkövetel:
+
+- a párosítás **új streamkulcsot** hoz létre — a régit nem tudnánk átadni,
+  mert a szerveren csak a hash-e létezik;
+- a token **egyszer használható**, 10 percig él, és nem kerül lemezre — a
+  csomag a szerver memóriájában várakozik a lejáratáig;
+- a `/api/pair/:token` a szokásos IP-korlát alatt fut, hogy a tokent ne
+  lehessen próbálgatni;
+- a letöltött **fájl titkot tartalmaz** — a felület ki is írja, hogy használat
+  után törölni kell.
+
+A beérkező címeket ugyanaz a normalizálás engedi át, mint a kézi bevitelt
+(`Settings.normalizeControlBase` / `normalizeIngestBase`), tehát egy régi vagy
+kézzel szerkesztett csomag sem tud útvonalat becsempészni az alap-címbe. Az
+import **egyetlen** írás: nem lehet félig párosított állapot. A *kapcsolat
+módhoz* nem nyúlunk — az a felhasználó döntése, a szerver nem tudhatja, épp
+otthon vagy-e.
+
 ---
 
 ## 5. WHIP publish

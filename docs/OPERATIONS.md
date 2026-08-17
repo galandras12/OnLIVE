@@ -149,6 +149,22 @@ itt lehet:
 
 ### 2.7 Az Android app
 
+**A leggyorsabb út a párosítás (1.0.110):** az admin felület **Streamkulcs**
+fülén nyomj **Párosítás indítása** gombot. A szerver átadja az összes címet, a
+stream útvonalat, a TURN adatokat és egy **új streamkulcsot** — begépelni semmit
+nem kell.
+
+| Ha az admin oldalt… | akkor |
+|---|---|
+| a telefonon nézed | koppints a megjelenő linkre (`onlive://pair?…`) — az app átveszi |
+| gépen nézed | **Beállítás letöltése fájlba**, másold át a telefonra, ott: fogaskerék → **Beállítás importálása fájlból** |
+
+A párosítás **10 percig érvényes és egyszer használható**. A csomag a nyers
+streamkulcsot tartalmazza, tehát titok: a letöltött fájlt használat után töröld.
+Több telefonhoz külön párosítás kell — az új kulcs a régit érvényteleníti.
+
+
+
 `android/` — Android Studióból telepítve. A **fogaskerék → Kapcsolat**
 szekcióba írd be az előző pontban létrehozott streamkulcsot és a Tunnel címeit,
 majd nyomj **Kapcsolat tesztelése** gombot: ha zöld, a cím és a kulcs is jó

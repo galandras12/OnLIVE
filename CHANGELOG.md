@@ -12,6 +12,65 @@ mapping between the two.
 
 ---
 
+## 1.0.110 — pairing: the server hands the settings over
+
+*2026-08-16*
+
+The failures of the last five releases all came from the same place: **manual
+typing**. An `/admin` suffix in the control address (1.0.019), a leftover
+`/ingest` in the ingest address (1.0.103), a mistyped key, a mismatched stream
+path. None of them produced an error message — only silent non-operation. And
+every one of them was a value **the server knows exactly**.
+
+So the server now hands over the whole configuration. No cloud, no account, no
+OAuth, no external storage:
+
+| Route | When | How |
+|---|---|---|
+| **Deep link** | you are viewing the admin page on the phone | one tap on the link (`onlive://pair?token=…`) |
+| **File** | you are viewing it on a computer | `onlive-pairing.json` → on the phone: gear → *Import settings from file* |
+
+The package carries: control and ingest base addresses, the local
+(LAN/Tailscale) addresses, stream path, ingest user, the **stream key**, and the
+**TURN credentials** — the last of which also had to be copied by hand until now.
+
+### Why not the cloud
+
+OAuth or cloud storage would mean an account, an external provider and a secret
+stored somewhere else — for a problem that is entirely local: two devices need
+to agree on a few addresses. The deep link and the file do the same job with no
+external dependency, and they work without internet access.
+
+### What security requires
+
+- Pairing **creates a new stream key** and invalidates the old one. Not a whim:
+  the old one could not be handed over anyway, since only its scrypt hash exists
+  on the server. Each phone needs its own pairing.
+- The token is **single-use** and lives for 10 minutes.
+- The package **never touches disk** on the server: it waits in memory until it
+  expires, and is deleted the moment it is handed out.
+- `/api/pair/:token` runs under the usual IP rate limit, so the token cannot be
+  guessed. A wrong token returns nothing secret.
+- The downloaded **file contains a secret** — the UI says so, and says to delete
+  it after use.
+
+### Against smuggling
+
+Incoming addresses pass through the same normalisation as typed ones, so an old
+or hand-edited package cannot sneak a path into a base address. The import is a
+**single** write — there is no half-paired state. The *connection mode* is left
+alone: that is the user's decision, and the server cannot know whether you are
+at home.
+
+### Tests
+
+8 new tests (230 → 238): the token is single-use and expires, the package is
+built from the server's verified values, the **addresses carry no path** (aimed
+squarely at the two earlier failures), pairing stores the hash of the new key —
+and a wrong token leaks nothing.
+
+---
+
 ## 1.0.104 — the local-address probe must not get stuck
 
 *2026-08-16*

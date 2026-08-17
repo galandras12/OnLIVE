@@ -111,6 +111,40 @@
     </section>
   </div>
 
+  <!-- ================= PÁROSÍTÁS ================= -->
+  <section class="card">
+    <h2>Telefon párosítása — gépelés nélkül</h2>
+    <p class="hint">
+      A szerver átadja az <b>összes</b> beállítást a telefonnak: címek, stream
+      útvonal, TURN — és a streamkulcsot is. Nem kell semmit begépelni, tehát
+      elgépelni sem lehet. Nincs hozzá felhő, fiók vagy OAuth: a csomag vagy egy
+      egyszer használatos linken, vagy egy fájlon keresztül jut át.
+    </p>
+    <p class="hint">
+      <b>A párosítás ÚJ streamkulcsot hoz létre</b>, és a régit érvényteleníti —
+      a régit nem tudnánk átadni, mert a szerveren csak a hash-e létezik. Ha több
+      telefonod van, mindegyiket párosítsd újra.
+    </p>
+
+    <div class="row">
+      <button class="btn" id="pairStart">Párosítás indítása</button>
+      <button class="btn ghost" id="pairFile" disabled>Beállítás letöltése fájlba</button>
+    </div>
+
+    <div class="reveal" id="pairResult" hidden>
+      <p><b>Kész — 10 percig érvényes, és egyszer használható.</b></p>
+      <p class="hint">
+        Ha ezt az oldalt <b>a telefonon</b> nézed, elég koppintani. Ha gépen,
+        töltsd le a fájlt, és a telefonon: fogaskerék → <b>Beállítás importálása</b>.
+      </p>
+      <p><a id="pairLink" class="mono" href="#">Beállítás átvétele az appba</a></p>
+      <p id="pairLocalWrap" hidden>
+        Helyi hálózaton: <a id="pairLocalLink" class="mono" href="#">helyi link</a>
+      </p>
+      <p class="hint">A link a streamkulcsot NEM tartalmazza — azt az app tölti le vele.</p>
+    </div>
+  </section>
+
   <!-- ================= TELEFON BEÁLLÍTÁS ================= -->
   <section class="card">
     <h2>Beállítás a telefonon</h2>
@@ -385,6 +419,51 @@
   // -------------------------------------------------------------------------
   //  Indulás
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  //  Párosítás (1.0.110)
+  // -------------------------------------------------------------------------
+
+  let pairingPayload = null;
+
+  el('pairStart').addEventListener('click', async () => {
+    const response = await api('/api/admin/pairing', { method: 'POST' });
+    if (!response.ok) return toast('A párosítás nem sikerült.');
+
+    const data = await response.json();
+    pairingPayload = data.payload;
+
+    // Szövegként állítjuk be, nem HTML-ként — a tartalom a szerver
+    // konfigurációjából jön, oda pedig bármi kerülhet.
+    el('pairLink').textContent = 'Beállítás átvétele az appba';
+    el('pairLink').setAttribute('href', data.deepLink);
+
+    if (data.localDeepLink) {
+      el('pairLocalLink').setAttribute('href', data.localDeepLink);
+      el('pairLocalWrap').hidden = false;
+    } else {
+      el('pairLocalWrap').hidden = true;
+    }
+
+    el('pairResult').hidden = false;
+    el('pairFile').disabled = false;
+    await load();
+    toast('Párosítás kész — új streamkulcs jött létre.');
+  });
+
+  el('pairFile').addEventListener('click', () => {
+    if (!pairingPayload) return;
+    // A fájlt a böngésző állítja elő a már megkapott csomagból: nem kell
+    // második végpont, és nem generálódik újabb kulcs sem.
+    const blob = new Blob([JSON.stringify(pairingPayload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'onlive-pairing.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('Letöltve. A fájl TITKOT tartalmaz — használat után töröld.');
+  });
 
   (async () => {
     await requireAuth();

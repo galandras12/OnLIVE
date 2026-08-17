@@ -12,6 +12,65 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.110 — párosítás: a szerver adja át a beállításokat
+
+*2026-08-16*
+
+Az elmúlt öt kiadás hibái sorra ugyanabból jöttek: **kézi begépelésből**. Egy
+`/admin` végződés a vezérlő címben (1.0.019), egy bennfelejtett `/ingest` az
+ingest címben (1.0.103), elgépelt kulcs, elcsúszott stream útvonal. Egyik sem
+hibaüzenetet adott, hanem néma nem-működést — és mindegyik olyan érték volt,
+amit **a szerver pontosan tud**.
+
+Ezért mostantól a szerver adja át a teljes beállítást. Nem kell hozzá felhő,
+fiók, OAuth vagy külső tárhely:
+
+| Út | Mikor | Hogyan |
+|---|---|---|
+| **Mély hivatkozás** | az admin oldalt a telefonon nézed | egy koppintás a linkre (`onlive://pair?token=…`) |
+| **Fájl** | az admin oldalt gépen nézed | `onlive-pairing.json` → a telefonon: fogaskerék → *Beállítás importálása fájlból* |
+
+A csomag tartalma: vezérlő és ingest alap-cím, a helyi (LAN/Tailscale) címek,
+stream útvonal, ingest felhasználó, **streamkulcs** és a **TURN adatok** — ez
+utóbbit eddig szintén kézzel kellett bemásolni.
+
+### Miért nem felhő
+
+Az OAuth vagy egy felhős tárhely fiókot, külső szolgáltatót és egy helyen
+tárolt titkot jelentene — egy olyan problémára, ami teljesen helyi: két
+eszköznek kell megegyeznie néhány címben. A mély hivatkozás és a fájl ugyanazt
+a munkát végzi el, külső függőség nélkül, akkor is, ha épp nincs internet.
+
+### Amit a biztonság megkövetel
+
+- A párosítás **új streamkulcsot** hoz létre, és a régit érvényteleníti. Nem
+  szeszély: a régit nem is tudnánk átadni, mert a szerveren csak a scrypt
+  hash-e létezik. Több telefonhoz külön párosítás kell.
+- A token **egyszer használható** és 10 percig él.
+- A csomag **nem kerül lemezre** a szerveren: a memóriában várakozik a
+  lejáratáig, és kiadás után azonnal törlődik.
+- A `/api/pair/:token` a szokásos IP-korlát alatt fut, tehát a tokent nem lehet
+  próbálgatni. Hibás tokennél a válasz semmilyen titkot nem tartalmaz.
+- A letöltött **fájl titkot tartalmaz** — a felület ki is írja, hogy használat
+  után törölni kell.
+
+### A becsempészés ellen
+
+A beérkező címeket ugyanaz a normalizálás engedi át, mint a kézzel gépelteket:
+egy régi vagy kézzel szerkesztett csomag sem tud útvonalat becsempészni az
+alap-címbe. Az import **egyetlen** írás — nincs félig párosított állapot. A
+*kapcsolat módhoz* nem nyúlunk: az a felhasználó döntése, a szerver nem
+tudhatja, épp otthon vagy-e.
+
+### Tesztek
+
+8 új teszt (230 → 238): a token egyszer használható és lejár, a csomag a
+szerver ellenőrzött értékeiből áll össze, a **címekben nincs útvonal** (pont a
+két korábbi hiba ellen), a párosítás elmenti az új kulcs hash-ét — és hibás
+tokennél semmilyen titok nem szivárog ki.
+
+---
+
 ## 1.0.104 — a helyi cím próbája nem ragadhat be
 
 *2026-08-16*

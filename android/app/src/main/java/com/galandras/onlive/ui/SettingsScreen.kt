@@ -1,6 +1,8 @@
 package com.galandras.onlive.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +54,7 @@ import com.galandras.onlive.settings.AppSettings
 import com.galandras.onlive.settings.AudioBitrate
 import com.galandras.onlive.settings.AudioSampleRate
 import com.galandras.onlive.settings.ConnectionMode
+import com.galandras.onlive.settings.PairingPayload
 import com.galandras.onlive.settings.FrameRate
 import com.galandras.onlive.settings.Settings
 import com.galandras.onlive.settings.StreamOrientation
@@ -108,6 +112,43 @@ fun SettingsScreen(
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
     var testOk by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    var importResult by remember { mutableStateOf<String?>(null) }
+    var importOk by remember { mutableStateOf(false) }
+
+    /**
+     * Beállítás importálása fájlból (1.0.110).
+     *
+     * `OpenDocument` a rendszer fájlválasztójával: nem kell hozzá tárhely-
+     * jogosultság, és a felhasználó pontosan egy fájlt ad oda. A csomagot a
+     * szerver állította elő, tehát nincs benne kézzel gépelt érték — épp ez a
+     * lényeg.
+     */
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val result = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                    ?: error("A fájlt nem sikerült megnyitni.")
+            }.mapCatching { PairingPayload.parse(it).getOrThrow() }
+
+            result
+                .onSuccess { payload ->
+                    appSettings.importPairing(payload)
+                    importOk = true
+                    importResult = "Beállítások átvéve.\n${payload.summary}"
+                    testResult = null
+                    onApply()
+                }
+                .onFailure {
+                    importOk = false
+                    importResult = it.message ?: "A fájl nem olvasható."
+                }
+        }
+    }
 
     /**
      * A kapcsolati mezők mentése — ezt a teszt is használja.
@@ -204,6 +245,25 @@ fun SettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )
+
+                        // -------------------------------------------------------
+                        //  Párosítás (1.0.110) — a szerver adja át a beállításokat
+                        // -------------------------------------------------------
+                        SubTitle("Párosítás a szerverrel")
+                        Hint(
+                            "A legegyszerűbb út: az admin felület Streamkulcs fülén indíts " +
+                                "párosítást. Ha az oldalt ezen a telefonon nézed, elég a linkre " +
+                                "koppintani — minden beállítás átjön. Ha gépen vagy, töltsd le a " +
+                                "fájlt, és itt olvasd be. Nincs mit begépelni, tehát elgépelni sem.",
+                        )
+                        OutlinedButton(
+                            onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Beállítás importálása fájlból") }
+
+                        importResult?.let { message ->
+                            Text(message, color = if (importOk) Ok else Live, fontSize = 12.sp)
+                        }
 
                         SubTitle("Cloudflare Tunnel címek")
                         Hint(

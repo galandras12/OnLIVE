@@ -20,7 +20,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.galandras.onlive.settings.AppSettings
 import com.galandras.onlive.settings.CaptureSource
+import com.galandras.onlive.settings.PairingPayload
 import com.galandras.onlive.stream.ConnectionState
+import com.galandras.onlive.net.ControlApi
 import com.galandras.onlive.stream.StreamBus
 import com.galandras.onlive.stream.StreamService
 import com.galandras.onlive.ui.OnLiveScreen
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
         appSettings = AppSettings(applicationContext)
 
         requestRuntimePermissions()
+        handlePairingIntent(intent)
 
         setContent {
             OnLiveScreen(
@@ -156,6 +159,50 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Párosító mély hivatkozás (1.0.110): `onlive://pair?token=…&server=…`.
+     *
+     * A launchMode `singleTask`, tehát futó appnál ez az `onNewIntent`-en
+     * érkezik — mindkét utat kezelni kell, különben a második párosítás néma
+     * maradna.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handlePairingIntent(intent)
+    }
+
+    private fun handlePairingIntent(intent: Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme != "onlive" || data.host != "pair") return
+
+        val token = data.getQueryParameter("token").orEmpty()
+        val server = data.getQueryParameter("server").orEmpty()
+        if (token.isBlank() || server.isBlank()) {
+            StreamBus.setMessage("A párosító link hiányos — indíts újat az admin felületen.")
+            return
+        }
+
+        // A linket egyszer használjuk fel: ha az Activity újraindul (forgatás,
+        // rendszer általi újraépítés), ne próbálja meg mégegyszer letölteni egy
+        // már felhasznált tokennel — abból csak egy félrevezető hibaüzenet lenne.
+        setIntent(Intent(Intent.ACTION_MAIN))
+
+        StreamBus.setMessage("Párosítás folyamatban…")
+        lifecycleScope.launch {
+            ControlApi().fetchPairing(server, token)
+                .mapCatching { body -> PairingPayload.parse(body).getOrThrow() }
+                .onSuccess { payload ->
+                    appSettings.importPairing(payload)
+                    StreamService.send(this@MainActivity, StreamService.ACTION_APPLY_SETTINGS)
+                    StreamBus.setMessage("Párosítva. ${payload.summary}")
+                }
+                .onFailure { error ->
+                    StreamBus.setMessage("A párosítás nem sikerült: ${error.message}")
+                }
+        }
+    }
 
     private fun requestRuntimePermissions() {
         val needed = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)

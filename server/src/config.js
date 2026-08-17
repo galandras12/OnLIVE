@@ -134,6 +134,19 @@ export const config = {
     tunnelService: process.env.ONLIVE_TUNNEL_SERVICE ?? 'cloudflared',
   },
 
+  /**
+   * TURN relay a WebRTC médiaúthoz (1.0.110 óta a párosítás is átadja).
+   *
+   * A WHIP jelzés átmegy a Cloudflare Tunnelen, a média NEM — ahhoz TURN kell.
+   * Eddig ezt kézzel kellett a telefonba gépelni; a szerver viszont ismeri,
+   * tehát átadhatja.
+   */
+  turn: {
+    url: process.env.ONLIVE_TURN_URL ?? '',
+    username: process.env.ONLIVE_TURN_USERNAME ?? '',
+    credential: process.env.ONLIVE_TURN_CREDENTIAL ?? '',
+  },
+
   publicUrls: {
     admin: process.env.ONLIVE_PUBLIC_ADMIN_URL ?? 'https://admin.galandras.com',
     live: process.env.ONLIVE_PUBLIC_LIVE_URL ?? 'https://live.galandras.com',

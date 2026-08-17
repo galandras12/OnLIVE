@@ -30,6 +30,7 @@ import { createStreamProxyRoutes } from './api/stream-proxy.js';
 import { createDeviceRoutes } from './api/device.js';
 import { createMonitorRoutes } from './api/monitor.js';
 import { createStreamKeyRoutes } from './api/stream-key.js';
+import { PairingStore, createPairingRoutes } from './api/pairing.js';
 import { createServerSettingsRoutes } from './api/server-settings.js';
 import { adminAuth, liveAuth as liveAuthFactory } from './api/auth.js';
 import { createAuthRoutes } from './api/auth-routes.js';
@@ -150,6 +151,12 @@ const liveAuth = liveAuthFactory(config, { sessions });
 const adminGuard = adminAuth(config, logger, { sessions, limiter: loginLimiter });
 
 /**
+ * Párosítások (1.0.110) — kizárólag a memóriában, rövid élettartammal.
+ * A csomag nyers streamkulcsot tartalmaz, ezért lemezre nem kerülhet.
+ */
+const pairings = new PairingStore();
+
+/**
  * Biztonsági fejlécek minden válaszon.
  *
  * A CSP `unsafe-inline`-t enged a szkriptekre, mert az admin oldalak
@@ -177,6 +184,7 @@ app.use(createRoutes({ config, controller, monitor, store, commands, limiter: lo
 app.use(createDeviceRoutes({ config, controller, commands, adminGuard, logger }));
 app.use(createMonitorRoutes({ config, store, metrics, links, adminGuard, logger }));
 app.use(createStreamKeyRoutes({ streamKeys, adminGuard, logger }));
+app.use(createPairingRoutes({ config, streamKeys, pairings, limiter: loginLimiter, adminGuard, logger }));
 app.use(createServerSettingsRoutes({ settings: serverSettings, config, logger, adminGuard, dependencyCheck: portDependencies }));
 app.use(createMediaRoutes({ config, mediaStore, controller, logger, liveAuth, adminGuard }));
 app.use(createOverlayRoutes({ config, overlayStore, controller, logger, liveAuth, adminGuard }));
