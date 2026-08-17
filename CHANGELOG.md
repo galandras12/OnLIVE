@@ -12,6 +12,58 @@ mapping between the two.
 
 ---
 
+## 1.0.103 — a path left in the ingest base address
+
+*2026-08-16*
+
+After the 1.0.102 diagnostics, the cause of a stalled live installation became
+visible. The phone had:
+
+```
+Ingest (WHIP):  http://100.74.161.60:8889/ingest
+Publish URL:    http://100.74.161.60:8889/ingest/onlive/whip
+```
+
+MediaMTX serves WHIP at the **root of its own port**:
+`http://<host>:8889/<stream>/whip`. The leftover `/ingest` made the request look
+for a path called `ingest/onlive`, which does not exist — HTTP 404, then endless
+reconnecting.
+
+The `/ingest` is an understandable mix-up: the **tunnel hostname** really is
+`ingest.…` — but that is a host name, not a path. And since cloudflared does not
+strip path prefixes, it cannot be there for tunnel addresses either.
+
+So every path is now stripped from the ingest base on save — not just the
+`/<stream>/whip` handled before — and the field shows **in advance** what it will
+become:
+
+> The ingest base address must have no path: `http://100.74.161.60:8889` — the
+> `/<stream>/whip` part is added by the app. It will be fixed on save.
+
+### The connection test says more
+
+It used to measure only the control leg and reported "OK" even when publishing
+was hopeless. It now prints the **publish URL**, reports from the server's ack
+whether media **is currently arriving**, and raises a distinct error when the
+**stream path does not match** the server's (phone: `onlive`, server:
+`something-else` → WHIP would 404). It also states plainly that this test
+measures the control leg; publishing is a separate route.
+
+### Two small things that shorten the search
+
+- When the server cannot reach **MediaMTX itself** (`available: false`), the
+  phone now says so in its own sentence — that is not the same as "no data", and
+  it is not the phone that needs fixing.
+- The server **logs its own local addresses at startup** (LAN and Tailscale,
+  control + ingest). These were only visible on the admin UI — which is exactly
+  what is hard to reach when the network is the problem.
+
+Two rows were added to the troubleshooting table in `docs/OPERATIONS.md`: the
+ingest address with a path, and the firewall case (local address does not
+answer) with a ready-to-paste `netsh` command.
+
+---
+
 ## 1.0.102 — mutual feedback: which leg is down, and why
 
 *2026-08-16*

@@ -234,6 +234,13 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
 
+                        // Az ingest alap-cím hibái MENTÉS ELŐTT látszanak (1.0.103):
+                        // egy bennfelejtett `/ingest` útvonalból végtelen
+                        // újracsatlakozás lesz, és semmi nem mondja meg, miért.
+                        Settings.ingestBaseIssue(ingestUrl, streamPath)?.let { issue ->
+                            Text(issue, color = Live, fontSize = 12.sp)
+                        }
+
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = streamPath,
@@ -275,11 +282,33 @@ fun SettingsScreen(
                                         // mérje, amivel az adás is menne.
                                         val current = persistConnection()
                                         controlApi.ping(current)
-                                            .onSuccess {
-                                                testOk = true
-                                                testResult = "Rendben. A szerver válaszol, a kulcs jó. " +
-                                                    "Állapot: ${it.state}" +
-                                                    if (it.route.isNotBlank()) "\n${it.route}" else ""
+                                            .onSuccess { ping ->
+                                                // A vezérlő út rendben — de ez ÖNMAGÁBAN nem
+                                                // jelenti, hogy a kép is fel tud menni (1.0.103).
+                                                val mismatch = ping.streamPath.isNotBlank() &&
+                                                    ping.streamPath.trim('/') != current.streamPath.trim('/')
+
+                                                testOk = !mismatch
+                                                testResult = buildString {
+                                                    append("A vezérlő szerver válaszol, a kulcs jó. ")
+                                                    append("Állapot: ${ping.state}")
+                                                    if (ping.route.isNotBlank()) append("\n${ping.route}")
+                                                    append("\nPublish cím: ${current.whipUrl}")
+                                                    if (mismatch) {
+                                                        append(
+                                                            "\nHIBA: a stream útvonal nem egyezik a szerverével " +
+                                                                "(telefon: ${current.streamPath}, szerver: ${ping.streamPath}). " +
+                                                                "Emiatt a WHIP publish 404-et kapna.",
+                                                        )
+                                                    }
+                                                    ping.ack?.let { ack ->
+                                                        append(
+                                                            "\nA szerver most " +
+                                                                if (ack.ingestFlowing) "LÁTJA a bejövő képet." else "nem lát bejövő képet.",
+                                                        )
+                                                    }
+                                                    append("\nEz a teszt a vezérlő utat méri; a WHIP publish külön út.")
+                                                }
                                             }
                                             .onFailure {
                                                 testOk = false
@@ -340,6 +369,10 @@ fun SettingsScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                             modifier = Modifier.fillMaxWidth(),
                         )
+
+                        Settings.ingestBaseIssue(localIngest, streamPath)?.let { issue ->
+                            Text(issue, color = Live, fontSize = 12.sp)
+                        }
 
                         SubTitle("Kapcsolat mód")
                         ChipRow {

@@ -1,6 +1,6 @@
 # OnLIVE
 
-**Version 1.0.102** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
+**Version 1.0.103** · [Changelog](CHANGELOG.md) · [Magyarul](README.hu.md)
 
 Live broadcasting system. An Android phone (camera/screen + audio) publishes over
 WHIP to a self-hosted server, which applies the intro / outro / interruption
@@ -199,3 +199,4 @@ open). Details: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.019`](CHANGELOG.md#10019--the-404-that-was-not-about-the-server) | — | The 404 that was not about the server |
 | [`1.0.101`](CHANGELOG.md#10101--portrait-and-landscape-a-lens-slider-and-a-local-route) | — | Portrait and landscape, a lens slider, and a local route |
 | [`1.0.102`](CHANGELOG.md#10102--mutual-feedback-which-leg-is-down-and-why) | — | Mutual feedback: which leg is down, and why |
+| [`1.0.103`](CHANGELOG.md#10103--a-path-left-in-the-ingest-base-address) | — | A path left in the ingest base address |

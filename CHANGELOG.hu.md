@@ -12,6 +12,57 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.103 — az ingest alap-címben bennfelejtett útvonal
+
+*2026-08-16*
+
+Az 1.0.102 diagnosztikája után kiderült, mi állította meg az adást egy éles
+telepítésen. A telefonon ez állt:
+
+```
+Ingest (WHIP):  http://100.74.161.60:8889/ingest
+Publish cím:    http://100.74.161.60:8889/ingest/onlive/whip
+```
+
+A MediaMTX a WHIP-et a **saját portjának gyökerében** szolgálja ki:
+`http://<gép>:8889/<stream>/whip`. A bennfelejtett `/ingest` miatt a kérés az
+`ingest/onlive` nevű útvonalat kereste, ami nem létezik — HTTP 404, majd
+végtelen újracsatlakozás.
+
+Az `/ingest` egyébként érthető félreértés: a **tunnel-hostname** neve tényleg
+`ingest.…`, csak az hostnév, nem útvonal. És mivel a cloudflared nem vág le
+útvonal-előtagot, tunnel-címnél sem lehet ott.
+
+Ezért az ingest alap-címről mostantól **minden** útvonal lekerül mentéskor — nem
+csak a korábban kezelt `/<stream>/whip` —, és a mező alatt **előre** megjelenik,
+mi lesz belőle:
+
+> Az ingest ALAP-cím útvonal nélkül kell: `http://100.74.161.60:8889` — a
+> `/<stream>/whip` részt az app teszi hozzá. Mentéskor javítom.
+
+### A kapcsolat-teszt is többet mond
+
+Eddig csak a vezérlő utat mérte, és „Rendben"-t írt akkor is, ha a publish
+menthetetlen volt. Mostantól kiírja a **publish címet**, a szerver nyugtájából
+azt is, hogy **lát-e épp képet**, és külön hibát ad, ha a **stream útvonal nem
+egyezik** a szerverével (telefon: `onlive`, szerver: `valami-mas` → a WHIP 404-et
+kapna). A végén pedig kimondja, hogy ez a teszt a vezérlő utat méri; a publish
+külön út.
+
+### Két apróság, ami a keresést rövidíti
+
+- Ha a szerver **magát a MediaMTX-et** nem éri el (`available: false`), a telefon
+  ezt már külön mondatban írja ki — nem ugyanaz, mint hogy „nincs adat", és nem
+  is a telefonon kell keresni a hibát.
+- A szerver **induláskor naplózza a saját helyi címeit** (LAN és Tailscale,
+  vezérlés + ingest). Eddig ezek csak az admin felületen látszottak — oda
+  viszont pont akkor nehéz bejutni, amikor a hálózattal van a baj.
+
+A `docs/OPERATIONS.md` hibaelhárító táblája két sorral bővült: az útvonalas
+ingest cím, és a tűzfal (a helyi cím nem válaszol) — kész `netsh` paranccsal.
+
+---
+
 ## 1.0.102 — kölcsönös visszajelzés: melyik láb áll, és miért
 
 *2026-08-16*

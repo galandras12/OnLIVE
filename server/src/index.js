@@ -38,6 +38,7 @@ import { StreamKeyStore } from './security/stream-key.js';
 import { ServerSettingsStore } from './settings/store.js';
 import { checkPortDependencies, describeMismatch } from './settings/dependencies.js';
 import { assessPublicUrls } from './settings/public-urls.js';
+import { localEndpoints } from './settings/local-address.js';
 import { RateLimiter } from './security/rate-limit.js';
 import { assessSecret } from './security/passwords.js';
 import { attachSocket } from './realtime/socket.js';
@@ -296,8 +297,28 @@ function banner() {
   }[config.portSource]})`);
 
   portReport();
+  localAddressReport();
   publicUrlReport();
   securityReport();
+}
+
+/**
+ * Helyi elérési címek kiírása induláskor (1.0.103).
+ *
+ * Ezek kellenek a telefon „Helyi elérés" mezőibe. Eddig csak az admin
+ * felületen látszottak — ahhoz viszont előbb be kell jutni, ami pont akkor
+ * nehéz, amikor a hálózattal van a baj. A naplóban mindig ott vannak.
+ */
+function localAddressReport() {
+  const { candidates } = localEndpoints({ port: config.port, whipPort: config.ingest.whepPort });
+  if (!candidates.length) {
+    logger.warn('Nem találtam helyi hálózati címet — csak a publikus (Tunnel) út marad.');
+    return;
+  }
+  for (const candidate of candidates) {
+    logger.info(`Helyi elérés (${candidate.kind}): ${candidate.control} · ingest ${candidate.ingest}`);
+  }
+  logger.info('Ha a telefon nem éri el ezeket, a tűzfalon kell átengedni a bejövő portokat.');
 }
 
 /**

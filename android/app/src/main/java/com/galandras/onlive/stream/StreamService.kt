@@ -393,7 +393,10 @@ class StreamService : LifecycleService() {
             ack.ingestFlowing -> "érkezik a kép (${ack.tracks} sáv, állapot: ${ack.state})"
             ack.ingestStalled -> "az útvonal él, de MEGÁLLT az adat — a média nem ér célba"
             ack.ingestAvailable -> "az útvonal létezik, de még nincs adat"
-            else -> "a szerverhez NEM érkezik kép (állapot: ${ack.state})"
+            // `available == false` mást jelent, mint „nincs adat": a szerver
+            // magát a MediaMTX-et nem éri el. Ilyenkor hiába jó a telefon
+            // beállítása, a szerveren kell megnézni, fut-e az ingest (1.0.103).
+            else -> "a szerver nem éri el a MediaMTX-et — fut az ingest a szerveren? (állapot: ${ack.state})"
         }
         StreamBus.updateLink { it.copy(serverSeesMedia = ack.ingestFlowing, serverDetail = detail) }
     }

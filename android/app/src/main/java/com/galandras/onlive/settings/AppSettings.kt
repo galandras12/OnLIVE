@@ -126,7 +126,41 @@ data class Settings(
                     value = value.dropLast(tail.length).trimEnd('/')
                 }
             }
-            return value
+
+            // MINDEN útvonal lekerül, nem csak a `/whip` (1.0.103).
+            //
+            // A MediaMTX a WHIP-et a saját portjának GYÖKERÉBEN szolgálja ki:
+            // `http://host:8889/<stream>/whip`. Ha az alap-címben marad egy
+            // útvonal (tipikusan `/ingest`, a tunnel-hostname mintájára), akkor
+            // a publish cím `…/ingest/onlive/whip` lesz, amit a MediaMTX
+            // `ingest/onlive` néven keresne — az pedig nem létezik, tehát
+            // HTTP 404, majd végtelen újracsatlakozás. A cloudflared sem vág le
+            // előtagot, tehát tunnel-címnél sem lehet ott útvonal.
+            return ORIGIN.find(value)?.groupValues?.get(1) ?: value
+        }
+
+        /** `https://host:port` — a séma és az authority, útvonal nélkül. */
+        private val ORIGIN = Regex("^(https?://[^/?#]+)")
+
+        /**
+         * Mi a baj az ingest alap-címmel, ha van baj (1.0.103).
+         *
+         * A beállítás-képernyő ezt írja ki a mező alá — mentés előtt, hogy ne
+         * egy végtelen újracsatlakozásból kelljen visszafejteni.
+         */
+        fun ingestBaseIssue(raw: String, streamPath: String = DEFAULT_STREAM_PATH): String? {
+            val value = raw.trim()
+            if (value.isBlank()) return null
+            if (ORIGIN.find(value) == null) {
+                return "Hiányzik a http:// vagy https:// előtag."
+            }
+
+            val normalized = normalizeIngestBase(value, streamPath)
+            if (normalized != value.trimEnd('/')) {
+                return "Az ingest ALAP-cím útvonal nélkül kell: $normalized — " +
+                    "a `/<stream>/whip` részt az app teszi hozzá. Mentéskor javítom."
+            }
+            return null
         }
     }
 }
