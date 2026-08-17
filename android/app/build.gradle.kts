@@ -31,8 +31,8 @@ android {
         // A névjegy (beállítások képernyő alja) ezt a két értéket írja ki,
         // a BuildConfig-on keresztül — tehát a kiadás verziószáma egyetlen
         // helyen áll, nem szövegként a felületen (1.0.101).
-        versionCode = 103
-        versionName = "1.0.103"
+        versionCode = 104
+        versionName = "1.0.104"
     }
 
     buildTypes {

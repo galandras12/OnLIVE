@@ -12,6 +12,45 @@ ez a fájl a kettő közti megfeleltetés.
 
 ---
 
+## 1.0.104 — a helyi cím próbája nem ragadhat be
+
+*2026-08-16*
+
+Az 1.0.103 után az ingest cím rendben volt (`http://100.74.161.60:8889`,
+publish `…/onlive/whip`), a telefon mégis újracsatlakozott, és ezt írta: *„A
+helyi cím nem válaszolt — publikus címen megyünk."*
+
+A publikus címen viszont a Cloudflare Tunnelen **nincs médiaút** TURN nélkül —
+tehát a helyi (Tailscale) út elvesztése önmagában elég ahhoz, hogy semmi ne
+menjen. Ezért a próbán három dolgot igazítottunk:
+
+| | Volt | Lett |
+|---|---|---|
+| időkorlát | 1,5 mp | **2,5 mp** |
+| próbálkozás | 1 | **2** (300 ms szünettel) |
+| „nem elérhető" érvényessége | 30 mp | **5 mp** |
+
+A nemleges eredmény rövid élettartama a lényeg: egy Tailscale- vagy
+VPN-útvonal a felépülés első pillanataiban még nem válaszol, másodpercekkel
+később viszont már igen. Ha a „nem érem el" fél percig érvényben marad, a
+telefon addig biztosan az alagúton próbálkozik — pont ott, ahol nincs kép. Az
+igenlő eredményt továbbra is 30 másodpercig hisszük el; azt nem éri meg
+újramérni.
+
+Ezen felül **minden sikertelen publish után eldobjuk a próba eredményét**: ha
+az alagúton nem ment, a következő kör előtt újra megnézzük, hátha közben
+felépült a helyi útvonal.
+
+### Ami ettől még nem javul magától
+
+Ha a telefon egyáltalán nem éri el a szerver Tailscale-címét, ez a változtatás
+nem segít — az a hálózaton múlik. Ellenőrizhető rebuild nélkül is: nyisd meg a
+telefon böngészőjében a `http://<tailscale-cím>:8080/admin` oldalt. Ha az sem
+jön be, a Tailscale kapcsolat vagy a szerver tűzfala a hibás
+([`docs/OPERATIONS.md`](docs/OPERATIONS.md) 6. fejezet, `netsh` paranccsal).
+
+---
+
 ## 1.0.103 — az ingest alap-címben bennfelejtett útvonal
 
 *2026-08-16*

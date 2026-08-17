@@ -1,6 +1,6 @@
 # OnLIVE
 
-**1.0.103 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
+**1.0.104 verzió** · [Changelog](CHANGELOG.hu.md) · [In English](README.md)
 
 Élő közvetítő rendszer: Android telefonról (kamera/képernyő + hang) induló adás,
 amit WHIP-en keresztül egy self-hosted szerver fogad, intro/outro/megszakadás-
@@ -201,3 +201,4 @@ Részletek: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 | [`1.0.101`](CHANGELOG.hu.md#10101--álló-és-fekvő-adás-lencse-csúszka-helyi-útvonal) | — | Álló és fekvő adás, lencse-csúszka, helyi útvonal |
 | [`1.0.102`](CHANGELOG.hu.md#10102--kölcsönös-visszajelzés-melyik-láb-áll-és-miért) | — | Kölcsönös visszajelzés: melyik láb áll, és miért |
 | [`1.0.103`](CHANGELOG.hu.md#10103--az-ingest-alap-címben-bennfelejtett-útvonal) | — | Az ingest alap-címben bennfelejtett útvonal |
+| [`1.0.104`](CHANGELOG.hu.md#10104--a-helyi-cím-próbája-nem-ragadhat-be) | — | A helyi cím próbája nem ragadhat be |

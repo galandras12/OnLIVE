@@ -12,6 +12,45 @@ mapping between the two.
 
 ---
 
+## 1.0.104 — the local-address probe must not get stuck
+
+*2026-08-16*
+
+After 1.0.103 the ingest address was correct
+(`http://100.74.161.60:8889`, publishing to `…/onlive/whip`), yet the phone kept
+reconnecting and reported: *"The local address did not answer — going over the
+public address."*
+
+But the public address has **no media path** through the Cloudflare Tunnel
+without TURN — so losing the local (Tailscale) route is by itself enough for
+nothing to work. Three things were adjusted on the probe:
+
+| | Was | Now |
+|---|---|---|
+| timeout | 1.5 s | **2.5 s** |
+| attempts | 1 | **2** (300 ms apart) |
+| lifetime of "unreachable" | 30 s | **5 s** |
+
+The short life of a negative result is the point: a Tailscale or VPN route does
+not answer during its first moments but does a few seconds later. If
+"unreachable" stays valid for half a minute, the phone spends that time trying
+the tunnel — exactly where there is no picture. A positive result is still
+trusted for 30 seconds; re-measuring that is not worth it.
+
+On top of that, **the probe result is discarded after every failed publish**: if
+the tunnel did not work, the next round re-checks whether the local route has
+come up in the meantime.
+
+### What this does not fix by itself
+
+If the phone cannot reach the server's Tailscale address at all, this change
+does not help — that is a network matter. It can be checked without rebuilding:
+open `http://<tailscale-address>:8080/admin` in the phone's browser. If that
+fails too, the Tailscale connection or the server's firewall is at fault (see
+chapter 6 of [`docs/OPERATIONS.md`](docs/OPERATIONS.md), with a `netsh` command).
+
+---
+
 ## 1.0.103 — a path left in the ingest base address
 
 *2026-08-16*

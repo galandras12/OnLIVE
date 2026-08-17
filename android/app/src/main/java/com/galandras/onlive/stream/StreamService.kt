@@ -302,6 +302,13 @@ class StreamService : LifecycleService() {
                 }
 
                 attempt++
+                // Sikertelen publish után eldobjuk a helyi cím próbájának
+                // eredményét (1.0.104): ha az alagúton nem megy, a következő
+                // kör előtt ÚJRA meg kell nézni, hátha közben felépült a
+                // Tailscale/LAN útvonal — a gyorsítótár különben percekig
+                // ugyanoda küldene minket.
+                controlApi.forgetLocalProbe()
+
                 val backoffMs = backoffMillis(attempt)
                 Log.w(TAG, "Csatlakozás sikertelen (#$attempt): ${error?.message}; újra ${backoffMs}ms múlva")
 

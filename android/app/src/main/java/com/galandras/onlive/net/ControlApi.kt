@@ -8,6 +8,7 @@ import com.galandras.onlive.settings.ResolvedEndpoints
 import com.galandras.onlive.settings.Settings
 import com.galandras.onlive.stream.StreamStats
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -51,8 +52,8 @@ class ControlApi(
      * másodperc alatt is kiderül minden, amit tudni kell.
      */
     private val probeClient: OkHttpClient = client.newBuilder()
-        .connectTimeout(1500, TimeUnit.MILLISECONDS)
-        .readTimeout(1500, TimeUnit.MILLISECONDS)
+        .connectTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        .readTimeout(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         .build()
 
     /** A legutóbbi próba eredménye — hogy ne mérjünk minden kérésnél. */
@@ -82,24 +83,44 @@ class ControlApi(
         if (base.isBlank()) return@withContext false
 
         val cached = localProbe
-        if (cached != null && cached.first == base &&
-            System.currentTimeMillis() - localProbeAt < PROBE_TTL_MS
-        ) {
-            return@withContext cached.second
+        val age = System.currentTimeMillis() - localProbeAt
+        // A NEMLEGES eredményt sokkal rövidebb ideig hisszük el, mint az
+        // igenlőt (1.0.104). Egy Tailscale/VPN kapcsolat a felépülés első
+        // pillanataiban még nem válaszol, de másodpercekkel később már igen —
+        // ha a „nem elérhető" fél percig érvényben marad, a telefon addig
+        // biztosan az alagúton próbálkozik, ahol viszont nincs médiaút.
+        if (cached != null && cached.first == base) {
+            val ttl = if (cached.second) PROBE_TTL_MS else PROBE_NEGATIVE_TTL_MS
+            if (age < ttl) return@withContext cached.second
         }
 
         // Bármilyen HTTP válasz jó: azt méri, hogy a szerver ELÉRHETŐ-e ezen a
         // címen. Ha 401-et ad, az kulcs-probléma, nem útvonal-probléma — az
         // alagúton ugyanúgy 401 lenne, tehát nincs értelme miatta váltani.
-        val reachable = runCatching {
-            probeClient.newCall(
-                Request.Builder().url("$base/api/session/ping").get().build(),
-            ).execute().use { true }
-        }.getOrDefault(false)
+        //
+        // Kétszer próbálunk: az elsőt gyakran még a VPN/Tailscale útvonal
+        // felépülése nyeli el.
+        var reachable = false
+        var lastError: String? = null
+        repeat(PROBE_ATTEMPTS) { attempt ->
+            if (reachable) return@repeat
+            val result = runCatching {
+                probeClient.newCall(
+                    Request.Builder().url("$base/api/session/ping").get().build(),
+                ).execute().use { true }
+            }
+            reachable = result.getOrDefault(false)
+            lastError = result.exceptionOrNull()?.message
+            if (!reachable && attempt < PROBE_ATTEMPTS - 1) delay(PROBE_RETRY_DELAY_MS)
+        }
 
         localProbe = base to reachable
         localProbeAt = System.currentTimeMillis()
-        Log.i(TAG, "Helyi cím próbája: $base → ${if (reachable) "elérhető" else "nem válaszol"}")
+        Log.i(
+            TAG,
+            "Helyi cím próbája: $base → " +
+                if (reachable) "elérhető" else "nem válaszol (${lastError ?: "időtúllépés"})",
+        )
         reachable
     }
 
@@ -334,6 +355,22 @@ class ControlApi(
          * és elég hosszú ahhoz, hogy ne mérjünk minden telemetria-körnél.
          */
         private const val PROBE_TTL_MS = 30_000L
+
+        /**
+         * A nemleges eredmény ennyi ideig él. Rövid, mert egy VPN/Tailscale
+         * kapcsolat másodpercek alatt felépülhet — a „nem érem el" nem
+         * ragadhat be fél percre.
+         */
+        private const val PROBE_NEGATIVE_TTL_MS = 5_000L
+
+        /**
+         * Egy próba időkorlátja. A 8 másodperces alap-időzítés itt túl sok
+         * lenne (annyit állna a „Kezdés" gomb mobilneten), 1,5 másodperc
+         * viszont kevésnek bizonyult egy épp ébredő Tailscale-útvonalhoz.
+         */
+        private const val PROBE_TIMEOUT_MS = 2_500L
+        private const val PROBE_ATTEMPTS = 2
+        private const val PROBE_RETRY_DELAY_MS = 300L
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }
